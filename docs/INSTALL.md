@@ -17,7 +17,7 @@ En un servidor con `/srv` gestionado por autofs, verificar el montaje mediante `
 
 ## Simulación Minimal
 
-`cargo run --locked -- simulate minimal` reutiliza el preflight de solo lectura. Distingue código disponible en este programa de presencia instalada desconocida, operaciones futuras aún sin definir y comprobaciones pendientes. Con `--fixture` usa el mismo stdin simulado del preflight. Es repetible y no escribe estado ni instala; no constituye un plan exacto ni implementación de reanudación. La capacidad permanece desconocida: una futura operación que la necesite deberá comprobarla de forma segura o rechazarse sin modificar datos. F1 permanece incompleta.
+`cargo run --locked -- simulate minimal` reutiliza el preflight de solo lectura. Enumera los módulos en el orden del perfil y distingue para cada uno código disponible en este programa o funcionalidad pendiente, presencia instalada desconocida y acciones de instalación sin definir; también muestra comprobaciones pendientes. Con `--fixture` usa el mismo stdin simulado del preflight. Es repetible y no escribe estado ni instala; no constituye un plan exacto ni implementación de reanudación. La capacidad permanece desconocida: una futura operación que la necesite deberá comprobarla de forma segura o rechazarse sin modificar datos. F1 permanece incompleta.
 
 La prueba de ausencia de escrituras está marcada como `ignored` para no crear archivos automáticamente: prepara un directorio aislado vacío con un único archivo `sentinel` cuyo contenido sea `unchanged`, y ejecuta `JAVIPIV2_TEST_SANDBOX=<directorio> cargo test --locked --test simulation simulation_does_not_change_isolated_state -- --ignored`. El directorio es responsabilidad de quien ejecuta la prueba.
 

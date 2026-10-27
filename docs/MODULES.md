@@ -8,6 +8,6 @@ Los módulos Rust verdaderos solo se crearán cuando aporten funcionalidad. Dura
 
 `preflight minimal` muestra las dependencias declaradas en orden, pero informa presencia y acciones como desconocidas; no deduce instalación del catálogo. El plan exacto y el mecanismo de idempotencia y reanudación siguen pendientes.
 
-`simulate minimal` añade una distinción explícita entre código de catálogo y health disponible en el programa y operaciones de instalación futuras todavía sin definir. No acredita instalación ni convierte `preview` o `planned` en estado del host.
+`simulate minimal` enumera los módulos en orden y distingue por módulo el código disponible en el programa, la funcionalidad pendiente y la presencia instalada desconocida; las acciones de instalación siguen sin definir. No acredita instalación ni convierte `preview` o `planned` en estado del host.
 
 El instalador F1 incorporará estados reales de instalación, registro de archivos, versiones, permisos, dependencias, comprobaciones y desinstalación. Esos estados aún no existen: el catálogo no debe presentarse como inventario del host.

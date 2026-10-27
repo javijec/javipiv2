@@ -1,5 +1,5 @@
 # F1 Minimal simulation
-Branch: develop | Delivery: ask-on-risk | Forecast: about 400+ authored lines
+Branch: develop | Delivery: stacked-to-main (user selected; origin/HEAD -> origin/main) | No push or PR authorized
 Checks: CARGO_BUILD_JOBS=1; cargo test --locked, cargo fmt --check, cargo clippy --locked --all-targets -- -D warnings, cargo build --locked
 
 ## Specs
@@ -19,8 +19,9 @@ S11. «La capacidad del almacenamiento permanece `unknown`.» «No confundir `un
 - T1 [S1] inline done — ARM64 baseline: cargo test 9 passed, fmt, strict clippy, build passed; bootstrap Python 3 passed; runtime status and minimal plan work. Commit: pending.
 - T2 [S2-S9] delegated partial — safe preflight and honest minimal preview committed as 06ab8e0; exact installation actions, system dependencies, storage capacity, installed state and resume remain pending.
 - T3 [S3,S7,S9] dropped — user chose unknown capacity and deferred further mount research; no HDD access.
-- T4 [S2,S4-S7,S11] delegated in_progress — implement truthful Minimal simulation, dependency order, evidence and repeatability without system writes.
-- T5 [S1-S10] pending — final checks, memory and commits.
+- T4 [S2,S4-S7,S11] partial — read-only Minimal simulation and repeatability committed as c659ed6; exact installation actions and installation/resumption remain pending.
+- T5 [S4-S7,S11] delegated in_progress — define concrete, evidence-backed plan steps and simulated states without executing installation.
+- T6 [S1-S11] pending — validate and record the next increment.
 
 ## Log
 L1 — User request verbatim:
@@ -148,3 +149,6 @@ Cuando una operación futura realmente necesite conocer el espacio disponible, d
 Ahora continuá de forma autónoma con las demás tareas seguras de F1. No vuelvas a solicitar una decisión sobre este mismo problema salvo que aparezca información técnica nueva que cambie materialmente el riesgo.
 
 **Objetivo: avanzar hacia un instalador Minimal funcional, modular, sencillo e idempotente.**
+
+L8 — Read-only simulation committed as c659ed6. Tests: 15 default passed, one explicitly ignored and passed separately in user-authorized RAM sandbox; fmt, strict clippy, build and differential comparison passed. Independent verifier accepted test isolation correction; native review review-1b492dad8ded4801 approved and acknowledged, informational R2-001/R3-001. The isolated test checks sentinel and directory entries, not all possible writes elsewhere or transient writes. F1 remains incomplete.
+L9 — User selected stacked-to-main for future review slices; origin/HEAD identifies main. Selection does not authorize push, PR or merge. Module details and user-required unknown storage states validated; independent verifier confirmed claims; previous help wording restored.

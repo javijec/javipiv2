@@ -90,6 +90,50 @@ fn simulation_does_not_change_isolated_state() {
 }
 
 #[test]
+fn simulation_storage_remains_unknown_for_both_fixture_states() {
+    for (input, expected) in [
+        (
+            b"unknown\nunknown\nmounted\n".as_slice(),
+            "montaje informado por fixture; capacidad desconocida",
+        ),
+        (
+            b"unknown\nunknown\nunknown\n".as_slice(),
+            "Almacenamiento: desconocido",
+        ),
+    ] {
+        let output = simulate(input);
+        assert_eq!(output.status.code(), Some(0));
+        assert!(output.stderr.is_empty());
+        let text = String::from_utf8(output.stdout).unwrap();
+        assert!(text.contains(expected));
+        assert!(!text.contains("disco ausente"));
+        assert!(!text.contains("capacidad: 0"));
+    }
+}
+
+#[test]
+fn simulation_details_each_ordered_module_without_claiming_installation() {
+    let out = simulate(b"unknown\nunknown\nunknown\n");
+    assert_eq!(out.status.code(), Some(0));
+    assert_eq!(out.stderr, b"");
+    let text = String::from_utf8(out.stdout).unwrap();
+    let expected = [
+        "1. core: código de catálogo y CLI disponible en este programa; presencia instalada desconocida; instalación sin definir",
+        "2. health: consulta de salud disponible en este programa; presencia instalada desconocida; instalación sin definir",
+        "3. storage: funcionalidad pendiente; presencia instalada desconocida; instalación sin definir",
+        "4. services: funcionalidad pendiente; presencia instalada desconocida; instalación sin definir",
+    ];
+    let mut last = 0;
+    for line in expected {
+        let pos = text
+            .find(line)
+            .unwrap_or_else(|| panic!("falta {line}: {text}"));
+        assert!(pos >= last);
+        last = pos + line.len();
+    }
+}
+
+#[test]
 fn simulation_rejects_invalid_input_without_output() {
     let out = simulate(b"invalid\n");
     assert_eq!(out.status.code(), Some(1));
