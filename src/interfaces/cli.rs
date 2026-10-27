@@ -12,6 +12,7 @@ fn help() {
     );
     println!("Uso: javipiv2 <comando>");
     println!("  status                 Host, uptime, memoria, carga y temperatura");
+    println!("  tui                    Interfaz interactiva de solo lectura (pendiente de validación)");
     println!("  module list            Catálogo (no instalaciones reales)");
     println!("  service list           Servicios conocidos por systemd (solo lectura)");
     println!("  service status <nombre>  Estado de un servicio (solo lectura)");
@@ -73,6 +74,7 @@ pub fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), String> {
     match parts.as_slice() {
         [] | ["help"] | ["--help"] | ["-h"] => help(),
         ["version"] | ["--version"] => println!("javipiv2 {}", env!("CARGO_PKG_VERSION")),
+        ["tui"] => super::tui::run()?,
         ["status"] => {
             let status = health::read_status().map_err(|e| format!("consulta /proc: {e}"))?;
             println!("Host: {}", status.hostname);
