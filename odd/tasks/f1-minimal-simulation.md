@@ -14,14 +14,17 @@ S8. «PLAN.md será nuestra fuente de verdad.» «Las funcionalidades deberán e
 S9. «El JaviPi original debe seguir funcionando sin cambios. No modificar sus servicios, Docker, SSH, Tailscale, backups, Engram Cloud productivo ni datos del HDD.»
 S10. «Creá commits pequeños, claramente identificados, después de las validaciones. No hagas push ni merge sin autorización.»
 S11. «La capacidad del almacenamiento permanece `unknown`.» «No confundir `unknown` con disco ausente, error o capacidad cero.» «Implementá un plan de instalación legible que distinga operaciones previstas, componentes disponibles y comprobaciones pendientes.» «Comprobá que el instalador puede ejecutarse repetidamente en modo simulación sin modificar el sistema.» «No declarar F1 terminada hasta cumplir sus criterios de aceptación.»
+S12. «Definir un modelo sencillo que distinga entre componentes pendientes, en ejecución, completados, fallidos y omitidos.» «El estado debe reflejar información recibida y operaciones realmente realizadas, nunca inventar resultados.» «Implementá solamente el modelo de estado y sus pruebas deterministas.»
 
 ## Tasks
 - T1 [S1] inline done — ARM64 baseline: cargo test 9 passed, fmt, strict clippy, build passed; bootstrap Python 3 passed; runtime status and minimal plan work. Commit: pending.
 - T2 [S2-S9] delegated partial — safe preflight and honest minimal preview committed as 06ab8e0; exact installation actions, system dependencies, storage capacity, installed state and resume remain pending.
 - T3 [S3,S7,S9] dropped — user chose unknown capacity and deferred further mount research; no HDD access.
 - T4 [S2,S4-S7,S11] partial — read-only Minimal simulation and repeatability committed as c659ed6; exact installation actions and installation/resumption remain pending.
-- T5 [S4-S7,S11] delegated in_progress — define concrete, evidence-backed plan steps and simulated states without executing installation.
-- T6 [S1-S11] pending — validate and record the next increment.
+- T5 [S4-S7,S11] partial — module-by-module available code and unknown installed state committed as 1953099; executable install actions and resume remain pending.
+- T6 [S4-S7,S11] dropped — rejected draft backed up and selectively removed per user instruction; no progress/resume implementation in this increment.
+- T7 [S12,S9] delegated in_progress — implement only simple installation-state model and deterministic tests.
+- T8 [S1-S12] pending — validate and record the next increment.
 
 ## Log
 L1 — User request verbatim:
@@ -151,4 +154,60 @@ Ahora continuá de forma autónoma con las demás tareas seguras de F1. No vuelv
 **Objetivo: avanzar hacia un instalador Minimal funcional, modular, sencillo e idempotente.**
 
 L8 — Read-only simulation committed as c659ed6. Tests: 15 default passed, one explicitly ignored and passed separately in user-authorized RAM sandbox; fmt, strict clippy, build and differential comparison passed. Independent verifier accepted test isolation correction; native review review-1b492dad8ded4801 approved and acknowledged, informational R2-001/R3-001. The isolated test checks sentinel and directory entries, not all possible writes elsewhere or transient writes. F1 remains incomplete.
-L9 — User selected stacked-to-main for future review slices; origin/HEAD identifies main. Selection does not authorize push, PR or merge. Module details and user-required unknown storage states validated; independent verifier confirmed claims; previous help wording restored.
+L9 — User selected stacked-to-main for future review slices; origin/HEAD identifies main. Selection does not authorize push, PR or merge. Module details and user-required unknown storage states validated; independent verifier confirmed claims; previous help wording restored. Native review review-b74ae20ebe5b98b3 approved and acknowledged with informational R2-001. Commit 1953099; no push/merge.
+L10 — User request verbatim:
+
+**Decisión: descartar selectivamente el borrador pendiente y continuar desde el último estado confirmado.**
+
+Antes de descartar código:
+
+1. Inspeccioná `git status` y `git diff`.
+2. Guardá una copia recuperable de los cambios pendientes, fuera del repositorio o en un área temporal segura.
+3. Descartá únicamente los cambios correspondientes al borrador rechazado.
+4. Conservá cualquier modificación independiente que sea válida, incluidos los avances de seguimiento en `odd/tasks/f1-minimal-simulation.md`.
+5. No utilices `git reset --hard`, `git clean` ni descartes archivos completos que contengan otros cambios.
+
+### Nueva prioridad de F1
+
+Quiero concentrar el trabajo exclusivamente en tres funcionalidades:
+
+**1. Estado de instalación**
+
+Definir un modelo sencillo que distinga entre componentes pendientes, en ejecución, completados, fallidos y omitidos.
+
+El estado debe reflejar información recibida y operaciones realmente realizadas, nunca inventar resultados.
+
+**2. Progreso**
+
+Registrar qué operaciones comenzaron, cuáles finalizaron, cuáles fallaron y qué queda pendiente.
+
+La simulación debe mostrar un progreso coherente, sin confundir acciones simuladas con instalaciones reales.
+
+**3. Reanudación**
+
+Preparar la lógica que permita continuar una instalación interrumpida, sin repetir innecesariamente operaciones ya completadas.
+
+Por ahora, demostrar el comportamiento mediante operaciones y estados simulados. No modificar el servidor productivo.
+
+### Reglas
+
+- No agregar opciones de CLI que todavía no aporten una función real.
+- No incorporar frameworks, supervisores ni mecanismos complejos.
+- Mantener la capacidad de `/srv` como `unknown`.
+- No modificar montajes, Docker, systemd ni paquetes del sistema.
+- Separar los errores del entorno de pruebas de los errores del código.
+- La falta de Rust en el entorno del revisor no constituye un fallo demostrado del programa, pero tampoco una validación independiente aprobada.
+- Si la revisión independiente no puede ejecutarse, registrar el bloqueo y utilizar las pruebas disponibles sin afirmar una aprobación inexistente.
+- No hacer push ni merge sin autorización.
+
+### Próximo incremento
+
+Implementá solamente el modelo de estado y sus pruebas deterministas.
+
+Después continuaremos con el registro de progreso y la reanudación, en incrementos pequeños y funcionales.
+
+Actualizá `PLAN.md` y el seguimiento correspondiente con el estado real. F1 permanece incompleta.
+
+**No quiero nuevas decisiones sobre este borrador. Descartalo selectivamente, conservá una copia recuperable y continuá con la implementación sencilla del estado de instalación.**
+
+L11 — Rejected draft saved as /dev/shm/javipiv2-draft-MJ4Jgp/rejected.patch (RAM, not durable across reboot) and selectively reversed after git diff inspection; task tracking preserved. New scope is installation-state model only.

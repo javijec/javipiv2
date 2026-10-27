@@ -58,8 +58,8 @@ El instalador inicial no implementa estos flujos: son gates obligatorios para F1
 ## Estado actual y siguiente trabajo
 
 - **F0:** CLI, perfiles y bootstrap validados en Raspberry ARM64 con pruebas, formato, Clippy estricto y build; CI remoto no comprobado.
-- **F1:** preflight y simulación Minimal de solo lectura en desarrollo: muestran perfil, dependencias, código disponible y comprobaciones pendientes, sin instalar. La capacidad de `/srv` permanece `unknown`: no implica ausencia ni capacidad cero y no se consulta el HDD ante falta de verificación segura. Una operación futura que necesite espacio deberá rechazar sin modificar datos si no puede comprobarlo con seguridad. Todavía no determina presencia real, acciones exactas ni implementa instalación, idempotencia o reanudación.
+- **F1:** preflight y simulación Minimal de solo lectura en desarrollo: muestran perfil, dependencias, código disponible y comprobaciones pendientes, sin instalar. Existe un modelo de cinco estados de instalación, todavía no conectado a operaciones. La capacidad de `/srv` permanece `unknown`: no implica ausencia ni capacidad cero y no se consulta el HDD ante falta de verificación segura. Una operación futura que necesite espacio deberá rechazar sin modificar datos si no puede comprobarlo con seguridad. Todavía no determina presencia real, acciones exactas ni implementa instalación, idempotencia o reanudación.
 - **F2–F6:** pendientes.
-- **Siguiente incremento:** avanzar con la simulación Minimal, acciones y evidencias verificables, sin consultar capacidad de `/srv`; después preparar artefactos y ensayar instalación en un entorno de prueba aislado, sin mutar el JaviPi actual.
+- **Siguiente incremento:** implementar el registro de progreso a partir de operaciones y estados simulados; después abordar la reanudación, sin consultar capacidad de `/srv` ni mutar el JaviPi actual.
 
 Mantené solo este plan vivo; la documentación adicional se limita a instalación, operación, módulos y recuperación. Cada commit actualiza el estado real sin simular aceptación.
