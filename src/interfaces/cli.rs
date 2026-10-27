@@ -11,7 +11,7 @@ fn help() {
         env!("CARGO_PKG_VERSION")
     );
     println!("Uso: javipiv2 <comando>");
-    println!("  status                 Host, uptime y memoria");
+    println!("  status                 Host, uptime, memoria, carga y temperatura");
     println!("  module list            Catálogo (no instalaciones reales)");
     println!("  plan <perfil>          Módulos previstos: minimal, developer, full");
     println!("  simulate minimal       Progreso simulado de solo lectura, sin instalar");
@@ -44,6 +44,19 @@ pub fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), String> {
                 status.memory_available_kib / 1024,
                 status.memory_total_kib / 1024
             );
+            let cpu = health::read_cpu_observation();
+            match cpu.load_average {
+                Some([one, five, fifteen]) => {
+                    println!("Carga promedio (1, 5, 15 min): {one}, {five}, {fifteen}");
+                }
+                None => println!("Carga promedio (1, 5, 15 min): desconocida"),
+            }
+            match cpu.cpu_temperature_millicelsius {
+                Some(temperature) => {
+                    println!("Temperatura CPU: {:.3} °C", temperature as f64 / 1000.0);
+                }
+                None => println!("Temperatura CPU: desconocida"),
+            }
         }
         ["module", "list"] => {
             for module in all_modules()? {
