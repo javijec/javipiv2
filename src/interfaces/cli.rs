@@ -2,7 +2,7 @@
 
 use crate::core::catalog::{all_modules, profile_modules};
 use crate::core::minimal_simulation::MinimalSimulation;
-use crate::modules::{health, preflight};
+use crate::modules::{health, preflight, services};
 use std::ffi::OsString;
 
 fn help() {
@@ -13,6 +13,8 @@ fn help() {
     println!("Uso: javipiv2 <comando>");
     println!("  status                 Host, uptime, memoria, carga y temperatura");
     println!("  module list            Catálogo (no instalaciones reales)");
+    println!("  service list           Servicios conocidos por systemd (solo lectura)");
+    println!("  service status <nombre>  Estado de un servicio (solo lectura)");
     println!("  plan <perfil>          Módulos previstos: minimal, developer, full");
     println!("  simulate minimal       Progreso simulado de solo lectura, sin instalar");
     println!("  simulate minimal --fixture  Simulación con evidencia de stdin");
@@ -20,6 +22,17 @@ fn help() {
     println!("  preflight minimal --fixture  Diagnóstico simulado desde stdin");
     println!("  version                Versión del proyecto");
     println!("  help                   Esta ayuda");
+}
+
+fn print_service(service: &services::Service) {
+    println!(
+        "{}: carga={}, actividad={}, subestado={}, categoría={}",
+        service.name,
+        service.load.as_deref().unwrap_or("desconocido"),
+        service.active.as_deref().unwrap_or("desconocido"),
+        service.sub.as_deref().unwrap_or("desconocido"),
+        service.category()
+    );
 }
 
 pub fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), String> {
@@ -58,6 +71,13 @@ pub fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), String> {
                 None => println!("Temperatura CPU: desconocida"),
             }
         }
+        ["service", "list"] => {
+            println!("Servicios conocidos por systemd (no es una lista completa de unidades instaladas):");
+            for service in services::list()? {
+                print_service(&service);
+            }
+        }
+        ["service", "status", name] => print_service(&services::status(name)?),
         ["module", "list"] => {
             for module in all_modules()? {
                 println!(

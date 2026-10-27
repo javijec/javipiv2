@@ -11,6 +11,8 @@ Con Rust instalado (se requiere Rust >= 1.99), en un entorno de desarrollo:
 ```bash
 cargo run --locked -- help
 cargo run --locked -- status
+cargo run --locked -- service list
+cargo run --locked -- service status ssh
 cargo run --locked -- module list
 cargo run --locked -- plan minimal
 cargo run --locked -- preflight minimal
@@ -25,6 +27,8 @@ cargo test --locked
 La biblioteca también ofrece `core::minimal_simulation::MinimalSimulation`: `new()` prepara el plan, `step()` simula una operación, `checkpoint()` devuelve bytes y `from_checkpoint(&bytes)` valida y recupera el progreso; `run()` termina las pendientes y `report()` muestra resultados simulados. El coordinador no abre rutas ni persiste esos bytes por sí mismo. El llamador es responsable de guardarlos en almacenamiento aislado y seguro; la API de archivos heredada de F1-C acepta rutas y no es una barrera de seguridad para rutas no confiables. La CLI `simulate minimal` utiliza este coordinador en memoria y conserva su preflight de solo lectura; no guarda ni recupera checkpoints.
 
 `status` lee hostname, uptime, memoria y promedios de carga de `/proc`, y busca la temperatura de CPU en `/sys/class/thermal`. Solo identifica una zona única de tipo `cpu-thermal`; si no hay evidencia suficiente o falla la lectura, muestra el dato como desconocido. Los promedios de carga no son porcentajes de uso de CPU. No ejecuta subprocesses, no requiere `sudo`, no consulta discos montados ni contacta servicios. F2-A está pendiente de ejecución y validación.
+
+`service list` consulta las unidades de servicio conocidas por systemd mediante `systemctl list-units --all`; no es un inventario completo de todas las unidades instaladas. `service status <nombre>` consulta una unidad concreta con `systemctl show`; se puede omitir el sufijo `.service`. Ambos muestran carga, actividad, subestado y una categoría: activo, inactivo, fallido o desconocido. Los valores originales de systemd se conservan; una unidad no encontrada, un estado distinto o información insuficiente no se clasifican como detenidos. Los errores de consulta se informan como errores. No se modifican servicios. F2-B y su comportamiento real están pendientes de validación.
 
 ## Convivencia durante el desarrollo
 
