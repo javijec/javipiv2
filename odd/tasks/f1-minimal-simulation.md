@@ -23,8 +23,8 @@ S12. «Definir un modelo sencillo que distinga entre componentes pendientes, en 
 - T4 [S2,S4-S7,S11] partial — read-only Minimal simulation and repeatability committed as c659ed6; exact installation actions and installation/resumption remain pending.
 - T5 [S4-S7,S11] partial — module-by-module available code and unknown installed state committed as 1953099; executable install actions and resume remain pending.
 - T6 [S4-S7,S11] dropped — rejected draft backed up and selectively removed per user instruction; no progress/resume implementation in this increment.
-- T7 [S12,S9] delegated in_progress — implement only simple installation-state model and deterministic tests.
-- T8 [S1-S12] pending — validate and record the next increment.
+- T7 [S12,S9] done — installation-state enum and deterministic tests committed as 183be5c; no transitions, progress, persistence or resume.
+- T8 [S1-S12] done — ARM64 tests, fmt, clippy and build passed; native review approved and acknowledged; F1 remains incomplete.
 
 ## Log
 L1 — User request verbatim:
@@ -211,3 +211,4 @@ Actualizá `PLAN.md` y el seguimiento correspondiente con el estado real. F1 per
 **No quiero nuevas decisiones sobre este borrador. Descartalo selectivamente, conservá una copia recuperable y continuá con la implementación sencilla del estado de instalación.**
 
 L11 — Rejected draft saved as /dev/shm/javipiv2-draft-MJ4Jgp/rejected.patch (RAM, not durable across reboot) and selectively reversed after git diff inspection; task tracking preserved. New scope is installation-state model only.
+L12 — Enum model with five distinct states validated by author: RED unresolved import, GREEN focused test, 18 default tests passed and one ignored; fmt, strict clippy, build passed. Native review review-d7421c39c79026d7 approved and acknowledged. No separate independent verifier was required by assessment; the prior verifier's missing Rust environment is not an approval or code failure. Commit 183be5c. Progress and resume remain future increments.
