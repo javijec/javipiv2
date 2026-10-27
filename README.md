@@ -13,8 +13,11 @@ cargo run --locked -- help
 cargo run --locked -- status
 cargo run --locked -- module list
 cargo run --locked -- plan minimal
+cargo run --locked -- preflight minimal
 cargo test --locked
 ```
+
+`preflight minimal` consulta `ID=dietpi` en `/etc/os-release` o un archivo no vacío y legible en `/boot/dietpi/.version` como evidencia de DietPi; si no hay evidencia, informa desconocido. La arquitectura es la del binario, no una comprobación independiente del host. Ordena módulos y dependencias sin inspeccionar rutas de almacenamiento ni ejecutables; capacidad, presencia y acciones son desconocidas. No es un plan exacto de instalación ni implementa idempotencia o reanudación. La opción `--fixture` lee como máximo 1024 bytes y tres líneas de stdin (`dietpi`/`unknown`/`debian`/`debian-marker`, `aarch64`/`unknown`, `mounted`/`unknown`) como datos simulados, no evidencia del host. `debian-marker` simula un marcador legible y no vacío.
 
 `status` solo lee `/proc` (hostname, uptime y memoria). No ejecuta subprocesses, no requiere `sudo`, no consulta discos montados ni contacta servicios.
 

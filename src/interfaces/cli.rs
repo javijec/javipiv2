@@ -1,7 +1,7 @@
 //! Una sola interfaz de comandos, sin operaciones privilegiadas.
 
 use crate::core::catalog::{all_modules, profile_modules};
-use crate::modules::health;
+use crate::modules::{health, preflight};
 use std::ffi::OsString;
 
 fn help() {
@@ -13,6 +13,8 @@ fn help() {
     println!("  status                 Host, uptime y memoria");
     println!("  module list            Catálogo (no instalaciones reales)");
     println!("  plan <perfil>          Módulos previstos: minimal, developer, full");
+    println!("  preflight minimal      Diagnóstico y dependencias de solo lectura");
+    println!("  preflight minimal --fixture  Diagnóstico simulado desde stdin");
     println!("  version                Versión del proyecto");
     println!("  help                   Esta ayuda");
 }
@@ -49,6 +51,8 @@ pub fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), String> {
             }
             println!("Nota: el catálogo no acredita instalación ni activación.");
         }
+        ["preflight", "minimal"] => preflight::run(false)?,
+        ["preflight", "minimal", "--fixture"] => preflight::run(true)?,
         ["plan", profile] => {
             println!("Perfil {profile} (propuesta, no ejecuta instalaciones):");
             for module in profile_modules(profile)? {

@@ -6,4 +6,6 @@ Los perfiles `profiles/{minimal,developer,full}.list` contienen una lista ordena
 
 Los módulos Rust verdaderos solo se crearán cuando aporten funcionalidad. Durante F0 existen `core/catalog.rs`, `modules/health.rs` e `interfaces/cli.rs`. Para futuras operaciones se exigirá separar instalación de habilitación y eliminación de datos, así como comprobar errores y recuperación específica.
 
+`preflight minimal` muestra las dependencias declaradas en orden, pero informa presencia y acciones como desconocidas; no deduce instalación del catálogo. El plan exacto y el mecanismo de idempotencia y reanudación siguen pendientes.
+
 El instalador F1 incorporará estados reales de instalación, registro de archivos, versiones, permisos, dependencias, comprobaciones y desinstalación. Esos estados aún no existen: el catálogo no debe presentarse como inventario del host.

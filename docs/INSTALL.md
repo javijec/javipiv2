@@ -11,6 +11,10 @@
 
 En un servidor con `/srv` gestionado por autofs, verificar el montaje mediante `/proc/self/mountinfo` **antes de abrir el checkout bajo `/srv`**. Estas instrucciones no autorizan forzar montajes.
 
+## Preflight Minimal
+
+`cargo run --locked -- preflight minimal` consulta `/etc/os-release` y el marcador `/boot/dietpi/.version`: `ID=dietpi` o un marcador legible y no vacío son evidencia de DietPi; sin evidencia el resultado es desconocido. Identifica la arquitectura del binario, no necesariamente la del host, y muestra el perfil con dependencias ordenadas. No abre `/srv` ni consulta capacidad: almacenamiento y dependencias del sistema permanecen desconocidos. La presencia de módulos y las acciones también son desconocidas. No existe todavía un plan exacto, registro de instalación, idempotencia ni reanudación. `--fixture` recibe tres líneas simuladas por stdin, como describe el README, y no representa evidencia real.
+
 ## Objetivo F1
 
 Un único instalador que prepare Minimal, Developer o Full en DietPi ARM64; compruebe prerequisitos, muestre el plan, instale solo módulos elegidos, registre versiones y permita reejecuciones idempotentes. La descarga deberá utilizar artefactos identificados y verificados; el instalador no ejecutará automáticamente scripts remotos.
