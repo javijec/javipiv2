@@ -2,7 +2,7 @@
 
 use crate::core::catalog::{all_modules, profile_modules};
 use crate::core::minimal_simulation::MinimalSimulation;
-use crate::modules::{health, preflight, services};
+use crate::modules::{docker, health, preflight, services};
 use std::ffi::OsString;
 
 fn help() {
@@ -15,6 +15,9 @@ fn help() {
     println!("  module list            Catálogo (no instalaciones reales)");
     println!("  service list           Servicios conocidos por systemd (solo lectura)");
     println!("  service status <nombre>  Estado de un servicio (solo lectura)");
+    println!("  docker status          Consultar daemon Docker local");
+    println!("  docker list            Listar contenedores locales");
+    println!("  docker inspect <nombre>  Información básica de un contenedor");
     println!("  plan <perfil>          Módulos previstos: minimal, developer, full");
     println!("  simulate minimal       Progreso simulado de solo lectura, sin instalar");
     println!("  simulate minimal --fixture  Simulación con evidencia de stdin");
@@ -32,6 +35,13 @@ fn print_service(service: &services::Service) {
         service.active.as_deref().unwrap_or("desconocido"),
         service.sub.as_deref().unwrap_or("desconocido"),
         service.category()
+    );
+}
+
+fn print_container(container: &docker::Container) {
+    println!(
+        "{}: id={}, imagen={}, estado={}",
+        container.name, container.id, container.image, container.state
     );
 }
 
@@ -71,6 +81,20 @@ pub fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), String> {
                 None => println!("Temperatura CPU: desconocida"),
             }
         }
+        ["docker", "status"] => {
+            docker::status()?;
+            println!("Daemon Docker local disponible");
+        }
+        ["docker", "list"] => {
+            let containers = docker::list()?;
+            if containers.is_empty() {
+                println!("No hay contenedores");
+            }
+            for container in &containers {
+                print_container(container);
+            }
+        }
+        ["docker", "inspect", name] => print_container(&docker::inspect(name)?),
         ["service", "list"] => {
             println!("Servicios conocidos por systemd (no es una lista completa de unidades instaladas):");
             for service in services::list()? {
