@@ -1,0 +1,8 @@
+[package]
+name = "javipiv2"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.74"
+description = "Administrador modular y reinstalable de Raspberry Pi con DietPi"
+
+[dependencies]

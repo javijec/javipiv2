@@ -1,0 +1,64 @@
+# JaviPiV2 — Plan maestro
+
+**Objetivo:** reemplazar JaviPi anterior con un administrador personal completo para Raspberry Pi / DietPi ARM64: sencillo, modular, reinstalable y recuperable.
+
+## Principios
+
+- Proyecto independiente; no fusionar ramas ni incorporar automáticamente las arquitecturas Rust previas.
+- Un paquete Rust inicial y módulos internos por responsabilidad; separar crates solo cuando haya un beneficio comprobable.
+- Un motor compartido para CLI, Ratatui, Dashboard y Telegram, sin backends duplicados.
+- Integrar software probado: Linux/systemd, Docker/Compose, SSH/Tailscale, Restic, Git, Codex, Pi, Gentle Shell y Engram.
+- No inventar protocolos criptográficos ni supervisores de procesos genéricos.
+- Consultas sin efectos secundarios; acciones tipadas, privilegios mínimos, validación y confirmación cuando corresponda.
+- Instalar != habilitar; deshabilitar != desinstalar; eliminar código != borrar datos.
+- El instalador debe ser repetible, con perfiles y estado verificable; la restauración es parte del producto.
+- Nunca formatear discos o modificar servicios, red, montajes ni datos automáticamente durante el desarrollo.
+- `main` estable, trabajo en `develop`, commits pequeños y pruebas acordes al riesgo.
+
+## Cobertura funcional
+
+Las 21 áreas del catálogo en `catalog/modules.tsv` son: core, health, storage, services, docker, projects, deploy, developer, agents, ai, remote, engram, engram-cloud, backups, updates, watchdog, notifications, clean, tui, dashboard y telegram. La cobertura es una lista de requisitos: `planned` no significa implementado ni instalado.
+
+## Almacenamiento deseado
+
+- microSD: DietPi, binarios y configuración del sistema.
+- HDD USB (`/srv`): `workspaces`, `docker`, `stacks`, `tools`, `cache`, `engram`, `data` y `backups`.
+- Configuración `/etc/javipiv2`; estado `/var/lib/javipiv2`; logs de servicios vía journald.
+- No seguir rutas bajo `/srv` si autofs no demuestra un montaje de datos activo; no formatear automáticamente.
+- Backups fuera del propio HDD para tolerar su falla física.
+
+## Etapas y entregables
+
+| Fase | Entrega | Criterio de terminación |
+| --- | --- | --- |
+| F0 — Base | Repo independiente, Rust CLI, catálogo y perfiles, bootstrap sin efectos | Rust compila, pruebas pasan, plan de instalación visible; ninguna modificación al host |
+| F1 — Instalación | Bootstrap idempotente, selección de módulos, dependencias, configuración y activación separada | Minimal instalado dos veces en DietPi de prueba, con logs y recuperación de fallos |
+| F2 — Observación | CPU, RAM, red, montajes, SMART opcional, systemd y Docker solo lectura | Mediciones reales verificadas, unknown ante falta de evidencia, sin activar automount |
+| F3 — Administración | Services, Docker, Projects, Deploy, Developer, Agents, AI, Remote, Engram/Cloud | Cada módulo instalable/habilitable por separado y operaciones tipadas comprobadas |
+| F4 — Mantenimiento | Restic/restore, Updates, Watchdog, Notifications y Clean | Backup/restore ensayados; rollback solo donde esté realmente verificado |
+| F5 — Interfaces | Ratatui, Dashboard, pantalla táctil y Telegram | Misma lógica compartida; Dashboard autenticado; ningún comando shell libre |
+| F6 — Migración | Matriz de equivalencias, migrador de configuración y pruebas de reinstalación | Se reconstruye el servidor desde DietPi limpio y backup externo sin perder funciones del alcance |
+
+## Perfiles
+
+- `minimal`: núcleo, salud, almacenamiento y servicios (la selección no activa servicios automáticamente).
+- `developer`: Minimal más proyectos, toolchains, agentes, IA, acceso remoto, Engram, backup y actualización.
+- `full`: los 21 módulos, incluidas integraciones que necesiten credenciales y configuración posterior.
+
+Los archivos `profiles/*.list` son la fuente de verdad inicial para la selección; el orden incorpora las dependencias. Las dependencias e identidad de módulos se encuentran en `catalog/modules.tsv`.
+
+## Reinstalación y recuperación: requisitos de producto
+
+1. **MicroSD formateada, HDD intacto:** instalar DietPi y JaviPiV2, reconocer el disco por UUID, reutilizar datos y restaurar configuración/módulos sin borrar información.
+2. **MicroSD + HDD perdidos:** reinstalar, recuperar desde repositorio Restic externo y restaurar bases de datos y volúmenes mediante procedimientos verificados.
+3. **Migración del JaviPi antiguo:** importar configuraciones y datos por componente con copia previa y consentimiento; dejar el viejo sistema intacto hasta validar la sustitución.
+
+El instalador inicial no implementa estos flujos: son gates obligatorios para F1/F4/F6.
+
+## Estado actual y siguiente trabajo
+
+- **F0:** esqueleto inicial implementado como código fuente; validación ARM64 y CI por ejecutar.
+- **F1–F6:** pendientes.
+- **Siguiente incremento:** obtener Cargo disponible en un entorno aislado, validar `cargo fmt/test/clippy/build --locked`; después preparar un paquete/artefacto reproducible ARM64 y un instalador Minimal en una VM o Raspberry de pruebas, sin mutar el JaviPi actual.
+
+Mantené solo este plan vivo; la documentación adicional se limita a instalación, operación, módulos y recuperación. Cada commit actualiza el estado real sin simular aceptación.

@@ -1,7 +1,44 @@
 # JaviPiV2
 
-Proyecto nuevo de administración modular para Raspberry Pi / DietPi, implementado gradualmente en Rust.
+Nuevo administrador **modular, sencillo y reinstalable** de Raspberry Pi con DietPi, construido principalmente en Rust.
 
-**Estado:** inicio de proyecto. La rama `main` queda como base; el desarrollo activo se realiza en [`develop`](../../tree/develop).
+> **Estado: F0 / prototipo.** Este repositorio no instala nada todavía y no reemplaza ni modifica el JaviPi existente. El catálogo enumera funcionalidades planificadas, no componentes ya disponibles.
 
-No instala ni modifica el JaviPi anterior automáticamente.
+## Primera vista funcional
+
+Con Rust instalado (se requiere Rust >= 1.74), en un entorno de desarrollo:
+
+```bash
+cargo run --locked -- help
+cargo run --locked -- status
+cargo run --locked -- module list
+cargo run --locked -- plan minimal
+cargo test --locked
+```
+
+`status` solo lee `/proc` (hostname, uptime y memoria). No ejecuta subprocesses, no requiere `sudo`, no consulta discos montados ni contacta servicios.
+
+## Primer paso hacia el instalador
+
+```bash
+bash installer/bootstrap.sh --help
+bash installer/bootstrap.sh --check
+bash installer/bootstrap.sh --plan developer
+```
+
+El bootstrap **solo inspecciona y presenta perfiles**. No descarga ni instala paquetes, no escribe en `/etc`, no toca `/srv`, no prepara particiones y no usa `sudo`. La instalación automatizada está planificada para F1, no existe aún.
+
+Los perfiles están en `profiles/`, y el catálogo único de módulos está en `catalog/modules.tsv`. El mismo catálogo se compila en Rust para el CLI. Las 21 áreas cubren las funcionalidades del proyecto original, pero casi todas siguen en estado `planned`.
+
+## Alcance y diseño
+
+- Un paquete Cargo con módulos internos. Se crean subcrates solo si surge una necesidad real.
+- CLI, futura TUI, API y Telegram reutilizarán las mismas operaciones.
+- Permisos Linux y herramientas existentes; sin protocolo criptográfico propio.
+- Instalar, habilitar, deshabilitar y retirar módulos serán operaciones distintas.
+- Instalar en DietPi recién formateado y restaurar datos/configuración es un objetivo central.
+- Datos del HDD y accesos SSH/Tailscale preservados durante desarrollo y migración.
+
+Consulta [PLAN.md](PLAN.md), [instalación](docs/INSTALL.md) y [restauración](docs/RECOVERY.md).
+
+**Este repositorio es público:** nunca subir tokens, claves, contraseñas ni configuraciones personales reales.

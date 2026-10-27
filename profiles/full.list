@@ -1,0 +1,22 @@
+# Todos los módulos previstos; todavía no todos implementados
+core
+health
+storage
+services
+projects
+developer
+agents
+ai
+remote
+engram
+docker
+deploy
+engram-cloud
+backups
+updates
+notifications
+watchdog
+clean
+tui
+dashboard
+telegram

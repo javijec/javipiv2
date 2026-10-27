@@ -1,0 +1,22 @@
+# id	group	dependencies	state	description
+core	core	-	preview	Núcleo y CLI
+health	system	core	preview	CPU, memoria y diagnóstico
+storage	system	core	planned	Discos, montajes y SMART
+services	system	core	planned	Servicios systemd
+projects	developer	core,storage	planned	Workspaces y repositorios Git
+developer	developer	core	planned	Toolchains y herramientas
+agents	developer	core,projects,developer	planned	Codex, Pi y Gentle Shell
+ai	developer	core,agents	planned	Integraciones de inteligencia artificial
+remote	network	core	planned	SSH, Tailscale y runtimes remotos
+engram	data	core,agents	planned	Memoria de agentes
+docker	apps	core,storage,services	planned	Docker y Compose
+deploy	apps	core,docker,projects	planned	Despliegues de proyectos
+engram-cloud	data	core,docker,engram	planned	Engram Cloud y PostgreSQL
+backups	maintenance	core,storage	planned	Restic y restauración
+updates	maintenance	core,backups	planned	Versiones y actualizaciones
+notifications	maintenance	core	planned	Notificaciones
+watchdog	maintenance	core,health,services,notifications	planned	Supervisión periódica
+clean	maintenance	core,storage	planned	Limpieza segura
+tui	interface	core,health	planned	Interfaz Ratatui
+dashboard	interface	core,health,services	planned	Web y pantalla táctil
+telegram	interface	core,dashboard,notifications	planned	Bot y Mini App
