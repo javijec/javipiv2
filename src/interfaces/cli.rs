@@ -13,6 +13,8 @@ fn help() {
     println!("  status                 Host, uptime y memoria");
     println!("  module list            Catálogo (no instalaciones reales)");
     println!("  plan <perfil>          Módulos previstos: minimal, developer, full");
+    println!("  simulate minimal       Simulación de solo lectura, sin instalar");
+    println!("  simulate minimal --fixture  Simulación con evidencia de stdin");
     println!("  preflight minimal      Diagnóstico y dependencias de solo lectura");
     println!("  preflight minimal --fixture  Diagnóstico simulado desde stdin");
     println!("  version                Versión del proyecto");
@@ -50,6 +52,13 @@ pub fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), String> {
                 );
             }
             println!("Nota: el catálogo no acredita instalación ni activación.");
+        }
+        ["simulate", "minimal"] | ["simulate", "minimal", "--fixture"] => {
+            preflight::run(parts.len() == 3)?;
+            println!("Componentes de código disponibles en este programa: catálogo core y consulta health; no acreditan instalación en el host.");
+            println!("Operaciones previstas: acciones de instalación sin definir; no se ejecuta ninguna operación.");
+            println!("Comprobaciones pendientes: dependencias del sistema, presencia de módulos y capacidad de almacenamiento (desconocida).");
+            println!("Antes de una futura operación que requiera capacidad deberá verificarse de forma segura; si no es posible, se rechazará sin modificar datos.");
         }
         ["preflight", "minimal"] => preflight::run(false)?,
         ["preflight", "minimal", "--fixture"] => preflight::run(true)?,

@@ -58,8 +58,8 @@ El instalador inicial no implementa estos flujos: son gates obligatorios para F1
 ## Estado actual y siguiente trabajo
 
 - **F0:** CLI, perfiles y bootstrap validados en Raspberry ARM64 con pruebas, formato, Clippy estricto y build; CI remoto no comprobado.
-- **F1:** preflight Minimal de solo lectura en desarrollo: muestra el perfil y dependencias, y solo comunica evidencia disponible. Todavía no determina capacidad de almacenamiento, presencia real, acciones exactas ni implementa instalación, idempotencia o reanudación.
+- **F1:** preflight y simulación Minimal de solo lectura en desarrollo: muestran perfil, dependencias, código disponible y comprobaciones pendientes, sin instalar. La capacidad de `/srv` permanece `unknown`: no implica ausencia ni capacidad cero y no se consulta el HDD ante falta de verificación segura. Una operación futura que necesite espacio deberá rechazar sin modificar datos si no puede comprobarlo con seguridad. Todavía no determina presencia real, acciones exactas ni implementa instalación, idempotencia o reanudación.
 - **F2–F6:** pendientes.
-- **Siguiente incremento:** definir acciones y evidencias verificables para Minimal; comprobar almacenamiento sin activar autofs y validar la simulación antes de preparar artefactos y ensayar instalación en un entorno de prueba aislado, sin mutar el JaviPi actual.
+- **Siguiente incremento:** avanzar con la simulación Minimal, acciones y evidencias verificables, sin consultar capacidad de `/srv`; después preparar artefactos y ensayar instalación en un entorno de prueba aislado, sin mutar el JaviPi actual.
 
 Mantené solo este plan vivo; la documentación adicional se limita a instalación, operación, módulos y recuperación. Cada commit actualiza el estado real sin simular aceptación.

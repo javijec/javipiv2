@@ -15,6 +15,12 @@ En un servidor con `/srv` gestionado por autofs, verificar el montaje mediante `
 
 `cargo run --locked -- preflight minimal` consulta `/etc/os-release` y el marcador `/boot/dietpi/.version`: `ID=dietpi` o un marcador legible y no vacío son evidencia de DietPi; sin evidencia el resultado es desconocido. Identifica la arquitectura del binario, no necesariamente la del host, y muestra el perfil con dependencias ordenadas. No abre `/srv` ni consulta capacidad: almacenamiento y dependencias del sistema permanecen desconocidos. La presencia de módulos y las acciones también son desconocidas. No existe todavía un plan exacto, registro de instalación, idempotencia ni reanudación. `--fixture` recibe tres líneas simuladas por stdin, como describe el README, y no representa evidencia real.
 
+## Simulación Minimal
+
+`cargo run --locked -- simulate minimal` reutiliza el preflight de solo lectura. Distingue código disponible en este programa de presencia instalada desconocida, operaciones futuras aún sin definir y comprobaciones pendientes. Con `--fixture` usa el mismo stdin simulado del preflight. Es repetible y no escribe estado ni instala; no constituye un plan exacto ni implementación de reanudación. La capacidad permanece desconocida: una futura operación que la necesite deberá comprobarla de forma segura o rechazarse sin modificar datos. F1 permanece incompleta.
+
+La prueba de ausencia de escrituras está marcada como `ignored` para no crear archivos automáticamente: prepara un directorio aislado vacío con un único archivo `sentinel` cuyo contenido sea `unchanged`, y ejecuta `JAVIPIV2_TEST_SANDBOX=<directorio> cargo test --locked --test simulation simulation_does_not_change_isolated_state -- --ignored`. El directorio es responsabilidad de quien ejecuta la prueba.
+
 ## Objetivo F1
 
 Un único instalador que prepare Minimal, Developer o Full en DietPi ARM64; compruebe prerequisitos, muestre el plan, instale solo módulos elegidos, registre versiones y permita reejecuciones idempotentes. La descarga deberá utilizar artefactos identificados y verificados; el instalador no ejecutará automáticamente scripts remotos.
