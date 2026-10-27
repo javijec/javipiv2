@@ -156,14 +156,7 @@ impl SimulatedProgress {
     ) -> Result<(), String> {
         use std::sync::atomic::{AtomicU64, Ordering};
         static NEXT: AtomicU64 = AtomicU64::new(0);
-        let bytes = serde_json::to_vec(&Checkpoint {
-            version: 1,
-            progress: self,
-        })
-        .map_err(|e| e.to_string())?;
-        if bytes.len() > 1_048_576 {
-            return Err("checkpoint demasiado grande".into());
-        }
+        let bytes = self.checkpoint_bytes()?;
         let parent = path
             .parent()
             .filter(|p| !p.as_os_str().is_empty())
@@ -185,6 +178,19 @@ impl SimulatedProgress {
         std::fs::rename(temporary, path).map_err(|e| e.to_string())
     }
 
+    /// Serializa el progreso simulado sin elegir ni abrir rutas.
+    pub fn checkpoint_bytes(&self) -> Result<Vec<u8>, String> {
+        let bytes = serde_json::to_vec(&Checkpoint {
+            version: 1,
+            progress: self,
+        })
+        .map_err(|e| e.to_string())?;
+        if bytes.len() > 1_048_576 {
+            return Err("checkpoint demasiado grande".into());
+        }
+        Ok(bytes)
+    }
+
     /// Reconstruye y valida todo antes de devolver el progreso simulado.
     pub fn load_checkpoint<'a>(
         path: &std::path::Path,
@@ -198,11 +204,19 @@ impl SimulatedProgress {
             .take(LIMIT + 1)
             .read_to_end(&mut bytes)
             .map_err(|e| e.to_string())?;
-        if bytes.len() as u64 > LIMIT {
+        Self::from_checkpoint_bytes(&bytes, plan)
+    }
+
+    /// Valida datos externos sin aceptar ni abrir una ruta de archivo.
+    pub fn from_checkpoint_bytes<'a>(
+        bytes: &[u8],
+        plan: impl IntoIterator<Item = &'a str>,
+    ) -> Result<Self, String> {
+        if bytes.len() > 1_048_576 {
             return Err("checkpoint demasiado grande".into());
         }
         let checkpoint: OwnedCheckpoint =
-            serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
+            serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
         if checkpoint.version != 1 {
             return Err("versión de checkpoint incompatible".into());
         }

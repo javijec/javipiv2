@@ -15,8 +15,8 @@ S9. «Decisión: establecer Rust 1.99 como versión mínima del proyecto.» «Ce
 S10. «ningún checkpoint externo debe poder reconstruir un `SimulatedProgress` aceptado sin validar las invariantes del modelo.» «Utilizar un DTO privado para representar el checkpoint deserializable.» «Reconstruir `SimulatedProgress` exclusivamente mediante una API que valide versión, plan, identificadores y eventos.»
 
 ## Tasks
-- T1 [S1-S7] inline done — JSON checkpoint, ordered event replay and recovery; RED then GREEN; ARM64 checks passed.
-- T2 [S6-S10] inline in_progress — resolve R3/R4 with RED/GREEN and Rust 1.99, then focused review and commit.
+- T1 [S1-S7] inline done — JSON checkpoint, ordered event replay and recovery; RED then GREEN; commit 4a9ffa9.
+- T2 [S6-S10] inline done — R3/R4 checked with Rust 1.99.1, focused independent review, native approval and commit 4a9ffa9.
 
 ## Log
 L1 — User request verbatim:
@@ -90,3 +90,4 @@ L3 — Focused RED failed for missing checkpoint API; GREEN passed. ARM64 target
 L4 — Independent verifier confirmed tested recovery cases but did not verify Rust 1.74 or concurrent writers. Native review review-0f52aaae6109fcd5 escalated unknown causality R3-msrv-test and R4-deserialization-bypass; no approval or commit. Cloud sync reported nothing new, but status showed 61 pending imports and did not prove availability of the summary.
 L5 — User correction (verbatim excerpts): «Decisión: conservar la implementación de F1-C y resolver los dos hallazgos de la revisión antes de crear el commit.» «Decisión: establecer Rust 1.99 como versión mínima del proyecto.» «ningún checkpoint externo debe poder reconstruir un `SimulatedProgress` aceptado sin validar las invariantes del modelo.» «Utilizar un DTO privado para representar el checkpoint deserializable.» «Solicitá una revisión focalizada sobre R3 y R4.» «No empieces F1-D hasta finalizar F1-C.» Full correction retained in the session prompt.
 L6 — ARM64 rustc/cargo 1.99.1; rust-version 1.99. R4 compile-fail RED confirmed direct Deserialize was exposed; private DTO and replay removed the bypass, compile-fail GREEN. Focused 3 tests, full suite 25 passed and 1 ignored, fmt, strict Clippy and build passed. Concurrent writers and power-loss durability remain unproven.
+L7 — Independent focused review found no R3/R4 blocker; exact Rust 1.99.0 was not tested. Native review review-84aacb214b2b8322 approved and acknowledged with six informational advisories. Commit 4a9ffa9; stacked-to-main delivery boundary is df5f6ce..4a9ffa9. No push or merge.

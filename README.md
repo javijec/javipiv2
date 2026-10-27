@@ -6,7 +6,7 @@ Nuevo administrador **modular, sencillo y reinstalable** de Raspberry Pi con Die
 
 ## Primera vista funcional
 
-Con Rust instalado (se requiere Rust >= 1.74), en un entorno de desarrollo:
+Con Rust instalado (se requiere Rust >= 1.99), en un entorno de desarrollo:
 
 ```bash
 cargo run --locked -- help
@@ -21,6 +21,8 @@ cargo test --locked
 `preflight minimal` consulta `ID=dietpi` en `/etc/os-release` o un archivo no vacío y legible en `/boot/dietpi/.version` como evidencia de DietPi; si no hay evidencia, informa desconocido. La arquitectura es la del binario, no una comprobación independiente del host. Ordena módulos y dependencias sin inspeccionar rutas de almacenamiento ni ejecutables; capacidad, presencia y acciones son desconocidas. No es un plan exacto de instalación ni implementa idempotencia o reanudación. La opción `--fixture` lee como máximo 1024 bytes y tres líneas de stdin (`dietpi`/`unknown`/`debian`/`debian-marker`, `aarch64`/`unknown`, `mounted`/`unknown`) como datos simulados, no evidencia del host. `debian-marker` simula un marcador legible y no vacío.
 
 `simulate minimal` reutiliza el preflight y enumera los módulos en el orden del perfil: identifica el código disponible en este programa, la funcionalidad pendiente y la presencia instalada desconocida para cada módulo; las acciones de instalación siguen sin definir. `simulate minimal --fixture` acepta el mismo formato simulado; repetirlo no escribe estado ni instala nada. La capacidad sigue desconocida; una futura operación que la necesite debe comprobarla de forma segura o rechazarse sin modificar datos. No hay todavía plan exacto, idempotencia ni reanudación; F1 sigue incompleta.
+
+La biblioteca también ofrece `core::minimal_simulation::MinimalSimulation`: `new()` prepara el plan, `step()` simula una operación, `checkpoint()` devuelve bytes y `from_checkpoint(&bytes)` valida y recupera el progreso; `run()` termina las pendientes y `report()` muestra resultados simulados. El coordinador no abre rutas ni persiste esos bytes por sí mismo. El llamador es responsable de guardarlos en almacenamiento aislado y seguro; la API de archivos heredada de F1-C acepta rutas y no es una barrera de seguridad para rutas no confiables. La CLI `simulate minimal` conserva su preflight de solo lectura y no utiliza este coordinador.
 
 `status` solo lee `/proc` (hostname, uptime y memoria). No ejecuta subprocesses, no requiere `sudo`, no consulta discos montados ni contacta servicios.
 
