@@ -2,7 +2,7 @@
 
 use crate::core::catalog::{all_modules, profile_modules};
 use crate::core::minimal_simulation::MinimalSimulation;
-use crate::modules::{docker, health, preflight, services};
+use crate::modules::{docker, health, preflight, projects, services};
 use std::ffi::OsString;
 
 fn help() {
@@ -18,6 +18,9 @@ fn help() {
     println!("  docker status          Consultar daemon Docker local");
     println!("  docker list            Listar contenedores locales");
     println!("  docker inspect <nombre>  Información básica de un contenedor");
+    println!("  project list           Inventario Git de solo lectura");
+    println!("  project status <nombre>  Información Git del proyecto");
+    println!("  JAVIPIV2_WORKSPACES    Ruta configurable bajo /srv (predeterminada: /srv/workspaces)");
     println!("  plan <perfil>          Módulos previstos: minimal, developer, full");
     println!("  simulate minimal       Progreso simulado de solo lectura, sin instalar");
     println!("  simulate minimal --fixture  Simulación con evidencia de stdin");
@@ -43,6 +46,22 @@ fn print_container(container: &docker::Container) {
         "{}: id={}, imagen={}, estado={}",
         container.name, container.id, container.image, container.state
     );
+}
+
+fn print_project(project: &projects::Project) {
+    let state = match project.git {
+        projects::GitState::Compatible => "compatible (validez no verificada)",
+        projects::GitState::NotGit => "sin Git",
+        projects::GitState::Unknown => "unknown",
+    };
+    println!("{}: Git={}, rama={}, HEAD={}", project.name, state,
+        project.branch.as_deref().unwrap_or("unknown"),
+        project.head.as_deref().unwrap_or("unknown"));
+}
+
+fn projects() -> Result<projects::Projects, String> {
+    projects::Projects::new(std::env::var_os("JAVIPIV2_WORKSPACES")
+        .unwrap_or_else(|| OsString::from("/srv/workspaces")))
 }
 
 pub fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), String> {
@@ -95,6 +114,12 @@ pub fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), String> {
             }
         }
         ["docker", "inspect", name] => print_container(&docker::inspect(name)?),
+        ["project", "list"] => {
+            let entries = projects()?.list()?;
+            if entries.is_empty() { println!("No hay proyectos"); }
+            for entry in &entries { print_project(entry); }
+        }
+        ["project", "status", name] => print_project(&projects()?.status(name)?),
         ["service", "list"] => {
             println!("Servicios conocidos por systemd (no es una lista completa de unidades instaladas):");
             for service in services::list()? {
