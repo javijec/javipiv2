@@ -50,8 +50,8 @@ pub fn parse_status(host: &str, uptime: &str, meminfo: &str) -> io::Result<Syste
         return Err(invalid("hostname inválido"));
     }
     let seconds = parse_uptime(uptime).ok_or_else(|| invalid("uptime inválido"))?;
-    let total = parse_memory_kib(meminfo, "MemTotal")
-        .ok_or_else(|| invalid("MemTotal inválido"))?;
+    let total =
+        parse_memory_kib(meminfo, "MemTotal").ok_or_else(|| invalid("MemTotal inválido"))?;
     let available = parse_memory_kib(meminfo, "MemAvailable")
         .ok_or_else(|| invalid("MemAvailable inválido"))?;
     if total == 0 || available > total {

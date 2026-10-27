@@ -26,26 +26,45 @@ pub fn all_modules() -> Result<Vec<Module<'static>>, String> {
         }
         let columns: Vec<_> = row.split('\t').collect();
         if columns.len() != 5 {
-            return Err(format!("catálogo, línea {}: se esperan 5 columnas", index + 1));
+            return Err(format!(
+                "catálogo, línea {}: se esperan 5 columnas",
+                index + 1
+            ));
         }
         let id = columns[0];
         if !valid_id(id) || !ids.insert(id) {
             return Err(format!("módulo duplicado o inválido: {id}"));
         }
         let (group, depends, state, description) = (columns[1], columns[2], columns[3], columns[4]);
-        if group.is_empty() || description.trim().is_empty() || !matches!(state, "preview" | "planned") {
+        if group.is_empty()
+            || description.trim().is_empty()
+            || !matches!(state, "preview" | "planned")
+        {
             return Err(format!("metadatos inválidos para: {id}"));
         }
-        let dependencies = if depends == "-" { Vec::new() } else { depends.split(',').collect() };
+        let dependencies = if depends == "-" {
+            Vec::new()
+        } else {
+            depends.split(',').collect()
+        };
         if dependencies.iter().any(|d| !valid_id(d) || *d == id) {
             return Err(format!("dependencias inválidas para: {id}"));
         }
-        modules.push(Module { id, group, dependencies, state, description });
+        modules.push(Module {
+            id,
+            group,
+            dependencies,
+            state,
+            description,
+        });
     }
     for module in &modules {
         for dependency in &module.dependencies {
             if !ids.contains(dependency) {
-                return Err(format!("{} depende de un módulo desconocido: {dependency}", module.id));
+                return Err(format!(
+                    "{} depende de un módulo desconocido: {dependency}",
+                    module.id
+                ));
             }
         }
     }
@@ -54,7 +73,9 @@ pub fn all_modules() -> Result<Vec<Module<'static>>, String> {
 
 fn valid_id(id: &str) -> bool {
     !id.is_empty()
-        && id.bytes().all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+        && id
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
 }
 
 pub fn profile_source(profile: &str) -> Option<&'static str> {
@@ -79,11 +100,15 @@ pub fn profile_modules(profile: &str) -> Result<Vec<Module<'static>>, String> {
         if !seen.insert(id) {
             return Err(format!("módulo duplicado en {profile}: {id}"));
         }
-        let module = registry.iter().find(|m| m.id == id)
+        let module = registry
+            .iter()
+            .find(|m| m.id == id)
             .ok_or_else(|| format!("módulo desconocido en {profile}: {id}"))?;
         for dependency in &module.dependencies {
             if !selected.iter().any(|m: &Module<'_>| m.id == *dependency) {
-                return Err(format!("{id} requiere {dependency} antes en el perfil {profile}"));
+                return Err(format!(
+                    "{id} requiere {dependency} antes en el perfil {profile}"
+                ));
             }
         }
         selected.push(module.clone());
@@ -114,7 +139,10 @@ mod tests {
 
     #[test]
     fn full_profile_covers_every_catalogued_module() {
-        assert_eq!(profile_modules("full").unwrap().len(), all_modules().unwrap().len());
+        assert_eq!(
+            profile_modules("full").unwrap().len(),
+            all_modules().unwrap().len()
+        );
     }
 
     #[test]

@@ -5,7 +5,10 @@ use crate::modules::health;
 use std::ffi::OsString;
 
 fn help() {
-    println!("JaviPiV2 {} — preview de solo lectura", env!("CARGO_PKG_VERSION"));
+    println!(
+        "JaviPiV2 {} — preview de solo lectura",
+        env!("CARGO_PKG_VERSION")
+    );
     println!("Uso: javipiv2 <comando>");
     println!("  status                 Host, uptime y memoria");
     println!("  module list            Catálogo (no instalaciones reales)");
@@ -16,7 +19,9 @@ fn help() {
 
 pub fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), String> {
     let args = args.into_iter().collect::<Vec<_>>();
-    let parts = args.iter().map(|s| s.to_str().ok_or("argumento no UTF-8"))
+    let parts = args
+        .iter()
+        .map(|s| s.to_str().ok_or("argumento no UTF-8"))
         .collect::<Result<Vec<_>, _>>()?;
     match parts.as_slice() {
         [] | ["help"] | ["--help"] | ["-h"] => help(),
@@ -24,12 +29,23 @@ pub fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), String> {
         ["status"] => {
             let status = health::read_status().map_err(|e| format!("consulta /proc: {e}"))?;
             println!("Host: {}", status.hostname);
-            println!("Uptime: {} h {} min", status.uptime_seconds / 3600, (status.uptime_seconds / 60) % 60);
-            println!("Memoria disponible: {} / {} MiB", status.memory_available_kib / 1024, status.memory_total_kib / 1024);
+            println!(
+                "Uptime: {} h {} min",
+                status.uptime_seconds / 3600,
+                (status.uptime_seconds / 60) % 60
+            );
+            println!(
+                "Memoria disponible: {} / {} MiB",
+                status.memory_available_kib / 1024,
+                status.memory_total_kib / 1024
+            );
         }
         ["module", "list"] => {
             for module in all_modules()? {
-                println!("{:<15} {:<8} {}", module.id, module.state, module.description);
+                println!(
+                    "{:<15} {:<8} {}",
+                    module.id, module.state, module.description
+                );
             }
             println!("Nota: el catálogo no acredita instalación ni activación.");
         }
@@ -51,7 +67,12 @@ mod tests {
 
     #[test]
     fn known_read_only_commands() {
-        for args in [vec!["help"], vec!["version"], vec!["module", "list"], vec!["plan", "minimal"]] {
+        for args in [
+            vec!["help"],
+            vec!["version"],
+            vec!["module", "list"],
+            vec!["plan", "minimal"],
+        ] {
             assert!(run(args.into_iter().map(OsString::from)).is_ok());
         }
     }
