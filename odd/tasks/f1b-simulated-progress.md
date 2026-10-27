@@ -15,8 +15,8 @@ S9. «No utilizar Docker, systemctl, sudo ni instalaciones productivas durante l
 S10. «Ejecutá las pruebas específicas, la suite ARM64 aplicable, rustfmt, Clippy estricto y build con `CARGO_BUILD_JOBS=1` y `--locked`.» «Creá un commit aislado con F1-B cuando las verificaciones correspondientes pasen.»
 
 ## Tasks
-- T1 [S1-S9] inline done — in-memory simulation, focused RED unresolved module and GREEN 2 tests; no real actions.
-- T2 [S8-S10] inline in_progress — validate, review, update PLAN, commit.
+- T1 [S1-S9] inline done — in-memory simulation, focused RED unresolved module and GREEN 2 tests; commit df5f6ce; no real actions.
+- T2 [S8-S10] inline done — ARM64 tests, fmt, strict clippy, build and native review passed; commit df5f6ce.
 
 ## Log
 L1 — User request verbatim:
@@ -103,3 +103,4 @@ No empieces F1-C hasta terminar y validar F1-B.
 **Prioridad: código simple, modular y funcional. Sin introducir frameworks, nuevos supervisores ni infraestructura innecesaria.**
 
 L2 — Existing tracking delta corresponds to confirmed 183be5c and is preserved. .engram/ and tests/__pycache__/ remain untracked and excluded.
+L3 — Focused RED unresolved module then GREEN 2 tests; ARM64 suite, fmt, strict clippy and build passed. Existing optional sandbox test ignored. Native review review-bea3c401aeca7eef approved and acknowledged; two readability advisories. Commit df5f6ce. No F1-C implemented.
