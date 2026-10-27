@@ -34,6 +34,12 @@ fn simulation_is_repeatable_and_honest() {
         "acciones de instalación sin definir",
         "Comprobaciones pendientes",
         "Idempotencia y reanudación: pendientes",
+        "Progreso simulado: core completado (no instalado)",
+        "Progreso simulado: health completado (no instalado)",
+        "Progreso simulado: storage completado (no instalado)",
+        "Progreso simulado: services completado (no instalado)",
+        "operaciones reales ejecutadas: ninguna",
+        "Instalación y activación: desconocidas",
     ] {
         assert!(text.contains(part), "falta {part}: {text}");
     }
@@ -46,6 +52,18 @@ fn simulation_is_repeatable_and_honest() {
     assert!(
         text.find("storage: dependencias:").unwrap()
             < text.find("services: dependencias:").unwrap()
+    );
+    assert!(
+        text.find("Progreso simulado: core").unwrap()
+            < text.find("Progreso simulado: health").unwrap()
+    );
+    assert!(
+        text.find("Progreso simulado: health").unwrap()
+            < text.find("Progreso simulado: storage").unwrap()
+    );
+    assert!(
+        text.find("Progreso simulado: storage").unwrap()
+            < text.find("Progreso simulado: services").unwrap()
     );
 }
 

@@ -1,6 +1,7 @@
 //! Una sola interfaz de comandos, sin operaciones privilegiadas.
 
 use crate::core::catalog::{all_modules, profile_modules};
+use crate::core::minimal_simulation::MinimalSimulation;
 use crate::modules::{health, preflight};
 use std::ffi::OsString;
 
@@ -13,7 +14,7 @@ fn help() {
     println!("  status                 Host, uptime y memoria");
     println!("  module list            Catálogo (no instalaciones reales)");
     println!("  plan <perfil>          Módulos previstos: minimal, developer, full");
-    println!("  simulate minimal       Simulación de solo lectura, sin instalar");
+    println!("  simulate minimal       Progreso simulado de solo lectura, sin instalar");
     println!("  simulate minimal --fixture  Simulación con evidencia de stdin");
     println!("  preflight minimal      Diagnóstico y dependencias de solo lectura");
     println!("  preflight minimal --fixture  Diagnóstico simulado desde stdin");
@@ -56,7 +57,7 @@ pub fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), String> {
         ["simulate", "minimal"] | ["simulate", "minimal", "--fixture"] => {
             preflight::run(parts.len() == 3)?;
             println!("Componentes de código disponibles en este programa: catálogo core y consulta health; no acreditan instalación en el host.");
-            println!("Operaciones previstas: acciones de instalación sin definir; no se ejecuta ninguna operación.");
+            println!("Operaciones previstas: acciones de instalación sin definir; no se ejecuta ninguna operación real.");
             println!("Pasos del perfil (selección, no instalación):");
             for (index, module) in profile_modules("minimal")?.iter().enumerate() {
                 let availability = match module.id {
@@ -73,6 +74,11 @@ pub fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), String> {
             }
             println!("Comprobaciones pendientes: dependencias del sistema, presencia de módulos y capacidad de almacenamiento (desconocida).");
             println!("Antes de una futura operación que requiera capacidad deberá verificarse de forma segura; si no es posible, se rechazará sin modificar datos.");
+            let mut simulation = MinimalSimulation::new()?;
+            while let Some(id) = simulation.step()? {
+                println!("Progreso simulado: {id} completado (no instalado)");
+            }
+            print!("{}", simulation.report());
         }
         ["preflight", "minimal"] => preflight::run(false)?,
         ["preflight", "minimal", "--fixture"] => preflight::run(true)?,
