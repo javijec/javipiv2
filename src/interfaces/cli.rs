@@ -2,7 +2,7 @@
 
 use crate::core::catalog::{all_modules, profile_modules};
 use crate::core::minimal_simulation::MinimalSimulation;
-use crate::modules::{backups, docker, health, preflight, projects, services};
+use crate::modules::{backups, docker, health, preflight, projects, services, storage};
 use std::ffi::OsString;
 use std::io::Read;
 
@@ -22,6 +22,7 @@ fn help() {
     println!("  service plan <start|stop|restart> <unidad.service> --allow <unidad.service>");
     println!("                         Solo plan; --allow autoriza esa unidad para esta consulta");
     println!("  backup inspect --stdin  Observar snapshots JSON suministrados por stdin");
+    println!("  storage status         Montajes relevantes (observación pasiva)");
     println!("  docker status          Consultar daemon Docker local");
     println!("  docker list            Listar contenedores locales");
     println!("  docker inspect <nombre>  Información básica de un contenedor");
@@ -141,6 +142,34 @@ pub fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), String> {
             }
             println!("Último intento: desconocido");
             println!("Resultado del último intento: desconocido");
+        }
+        ["storage", "status"] => {
+            let status = storage::read_status();
+            println!(
+                "/srv autofs: {}",
+                if status.autofs {
+                    "confirmado"
+                } else {
+                    "desconocido"
+                }
+            );
+            println!(
+                "/srv ext4: {}",
+                if status.srv_ext4 {
+                    "confirmado"
+                } else {
+                    "desconocido"
+                }
+            );
+            if status.srv_ext4 {
+                println!("Montaje de datos: /srv (ext4)");
+            }
+            if status.docker_overlays.is_empty() {
+                println!("Overlay Docker: desconocido");
+            }
+            for path in status.docker_overlays {
+                println!("Overlay Docker: {path} (overlay)");
+            }
         }
         ["docker", "status"] => {
             docker::status()?;

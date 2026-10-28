@@ -1,0 +1,113 @@
+//! Observación pasiva de mountinfo; no accede a los puntos de montaje.
+use std::collections::HashSet;
+
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct StorageStatus {
+    pub autofs: bool,
+    pub srv_ext4: bool,
+    pub docker_overlays: Vec<String>,
+}
+
+fn unescape_mount_field(field: &str) -> Option<String> {
+    let bytes = field.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] != b'\\' {
+            decoded.push(bytes[i]);
+            i += 1;
+            continue;
+        }
+        let code = bytes.get(i + 1..i + 4)?;
+        decoded.push(match code {
+            b"040" => b' ',
+            b"011" => b'\t',
+            b"012" => b'\n',
+            b"134" => b'\\',
+            _ => return None,
+        });
+        i += 4;
+    }
+    String::from_utf8(decoded).ok()
+}
+
+/// Interpreta evidencia suministrada; false significa desconocido, no ausencia.
+pub fn inspect(raw: &str) -> StorageStatus {
+    let mut result = StorageStatus::default();
+    let mut ids = HashSet::new();
+    let mut entries = Vec::new();
+    for line in raw.lines() {
+        let Some((left, right)) = line.split_once(" - ") else {
+            return StorageStatus::default();
+        };
+        let fields: Vec<_> = left.split_whitespace().collect();
+        let after: Vec<_> = right.split_whitespace().collect();
+        if fields.len() < 6 || after.len() < 3 {
+            return StorageStatus::default();
+        }
+        let (Ok(id), Ok(parent)) = (fields[0].parse::<u64>(), fields[1].parse::<u64>()) else {
+            return StorageStatus::default();
+        };
+        if id == 0 || parent == 0 || !ids.insert(id) {
+            return StorageStatus::default();
+        }
+        let mount = unescape_mount_field(fields[4]);
+        let root = unescape_mount_field(fields[3]);
+        // Malformed unrelated paths are ignored; malformed /srv candidates invalidate evidence.
+        let Some(mount) = mount else {
+            if fields[4].starts_with('/') {
+                return StorageStatus::default();
+            }
+            continue;
+        };
+        if !mount.starts_with('/') {
+            continue;
+        }
+        let Some(root) = root else {
+            if mount == "/srv" || mount.starts_with("/srv/") {
+                return StorageStatus::default();
+            }
+            continue;
+        };
+        entries.push((id, parent, root, mount, after[0], fields[2], after[1]));
+    }
+    let srv: Vec<_> = entries.iter().filter(|e| e.3 == "/srv").collect();
+    if let [auto, ext] = srv.as_slice() {
+        let (auto, ext) = if auto.4 == "autofs" {
+            (*auto, *ext)
+        } else {
+            (*ext, *auto)
+        };
+        if auto.4 == "autofs" && auto.2 == "/" && auto.1 != ext.0 && ext.1 == auto.0 {
+            result.autofs = true;
+            result.srv_ext4 = is_ext4(ext);
+        }
+    } else if let [entry] = srv.as_slice() {
+        result.autofs = entry.4 == "autofs" && entry.2 == "/";
+        result.srv_ext4 = is_ext4(entry);
+    }
+    for entry in entries {
+        if entry.4 == "overlay"
+            && (entry.3.starts_with("/srv/docker/") || entry.3.starts_with("/var/lib/docker/"))
+        {
+            result.docker_overlays.push(entry.3);
+        }
+    }
+    result.docker_overlays.sort();
+    result
+}
+
+fn is_ext4(entry: &(u64, u64, String, String, &str, &str, &str)) -> bool {
+    entry.4 == "ext4"
+        && entry.2 == "/"
+        && entry.6 != "none"
+        && entry.5.split_once(':').is_some_and(|(a, b)| {
+            a.parse::<u32>().is_ok_and(|n| n != 0) && b.parse::<u32>().is_ok()
+        })
+}
+
+pub fn read_status() -> StorageStatus {
+    std::fs::read_to_string("/proc/self/mountinfo")
+        .map(|raw| inspect(&raw))
+        .unwrap_or_default()
+}

@@ -11,6 +11,7 @@ Con Rust instalado (se requiere Rust >= 1.99), en un entorno de desarrollo:
 ```bash
 cargo run --locked -- help
 cargo run --locked -- status
+cargo run --locked -- storage status
 cargo run --locked -- service list
 cargo run --locked -- service status ssh
 cargo run --locked -- docker status
@@ -40,6 +41,8 @@ F3-B prepara un ejecutor con argumentos separados y una política independiente 
 `docker status`, `docker list` y `docker inspect <contenedor>` consultan únicamente el daemon local mediante el cliente Docker, sin shell ni acciones de administración. List e inspect muestran solo nombre, ID abreviado, imagen y estado. Antes de conectar se comprueba que `docker.service` esté activo y que `docker.socket` no esté activo; si no se puede determinar, se rechaza la consulta. **Esta comprobación no elimina la ventana de carrera:** systemd podría cambiar de estado antes de la conexión y activar el socket. Las consultas requieren acceso autorizado al socket y F2-C permanece sin validar; no modifican permisos. No se usan contextos ni configuraciones Docker heredados.
 
 `project list` y `project status <nombre>` consultan carpetas directas de `/srv/workspaces`; `JAVIPIV2_WORKSPACES` permite configurar otra ruta absoluta bajo `/srv`. Antes de abrirla se exige evidencia pasiva en `/proc/self/mountinfo` de ext4 con raíz `/` en `/srv`, solo o directamente sobre una capa autofs. Se rechazan montajes que afecten la ruta consultada: para `list`, todo el árbol de workspaces; para `status`, sus antecesores y el árbol del proyecto elegido. Montajes ajenos como `/srv/docker` no bloquean la consulta. Si falta evidencia se informa `unknown` y no se recorre `/srv`. No demuestra la identidad física del disco ni garantiza excluir bind mounts; la comprobación tiene una ventana de carrera frente a cambios de montaje. Las operaciones futuras con efectos requieren comprobar identidad. No se consulta capacidad. Se leen directamente metadatos Git sin ejecutar Git ni shell, sin seguir enlaces; worktrees con archivo `.git`, metadatos inaccesibles y formatos no reconocidos quedan desconocidos. La categoría `compatible (validez no verificada)` solo indica metadatos con forma reconocible: no verifica objetos, integridad ni validez real del repositorio. Una referencia suelta inaccesible o inválida no se sustituye por un valor posiblemente obsoleto de `packed-refs`. Los nombres de carpetas no UTF-8 provocan un error `unknown` en lugar de omitirlas. No se consultan cambios, remotos ni sincronización. Las pruebas sintéticas de F2-D pasaron; su funcionamiento con proyectos reales sigue pendiente de validación.
+
+`storage status` lee únicamente `/proc/self/mountinfo`, sin abrir `/srv` ni activar autofs. Informa la evidencia de autofs y ext4 en `/srv` y overlays Docker reconocidos por ruta; no clasifica otros montajes como datos. La falta de evidencia se muestra como desconocido; es una instantánea y puede cambiar. No verifica identidad física, exclusión de bind mounts, salud ni capacidad. La integración en la TUI queda como propuesta futura, sin implementar.
 
 ## Snapshots suministrados por stdin
 
