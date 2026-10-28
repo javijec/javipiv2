@@ -16,6 +16,8 @@ fn help() {
     println!("  module list            Catálogo (no instalaciones reales)");
     println!("  service list           Servicios conocidos por systemd (solo lectura)");
     println!("  service status <nombre>  Estado de un servicio (solo lectura)");
+    println!("  service plan <start|stop|restart> <unidad.service> --allow <unidad.service>");
+    println!("                         Solo plan; --allow autoriza esa unidad para esta consulta");
     println!("  docker status          Consultar daemon Docker local");
     println!("  docker list            Listar contenedores locales");
     println!("  docker inspect <nombre>  Información básica de un contenedor");
@@ -129,6 +131,16 @@ pub fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), String> {
             }
         }
         ["service", "status", name] => print_service(&services::status(name)?),
+        ["service", "plan", operation, unit, "--allow", allowed] => {
+            let operation = operation.parse::<services::ServiceOperation>()?;
+            let allowlist = services::PlanAllowlist::new([(*allowed).to_owned()])?;
+            let plan = allowlist.plan(operation, unit)?;
+            println!("Plan solicitado (no ejecutado): {} en {}", plan.operation.as_str(), plan.unit);
+        }
+        ["service", "plan", operation, unit] => {
+            let operation = operation.parse::<services::ServiceOperation>()?;
+            services::PlanAllowlist::default().plan(operation, unit)?;
+        }
         ["module", "list"] => {
             for module in all_modules()? {
                 println!(
@@ -192,6 +204,16 @@ mod tests {
         ] {
             assert!(run(args.into_iter().map(OsString::from)).is_ok());
         }
+    }
+
+    #[test]
+    fn service_plans_require_explicit_exact_allowlist() {
+        let call = |args: Vec<&str>| run(args.into_iter().map(OsString::from));
+        assert!(call(vec!["service", "plan", "restart", "demo.service", "--allow", "demo.service"]).is_ok());
+        assert!(call(vec!["service", "plan", "start", "demo.service"]).is_err());
+        assert!(call(vec!["service", "plan", "stop", "demo.service", "--allow", "other.service"]).is_err());
+        assert!(call(vec!["service", "plan", "reload", "demo.service", "--allow", "demo.service"]).is_err());
+        assert!(call(vec!["service", "plan", "start", "../demo.service", "--allow", "../demo.service"]).is_err());
     }
 
     #[test]

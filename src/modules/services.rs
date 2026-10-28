@@ -1,6 +1,91 @@
 //! Consultas puntuales y de solo lectura al gestor systemd del sistema.
 
 use std::process::Command;
+use std::str::FromStr;
+
+/// Operaciones que se pueden describir, no ejecutar.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ServiceOperation {
+    Start,
+    Stop,
+    Restart,
+}
+
+impl FromStr for ServiceOperation {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "start" => Ok(Self::Start),
+            "stop" => Ok(Self::Stop),
+            "restart" => Ok(Self::Restart),
+            _ => Err("operación de servicio desconocida".into()),
+        }
+    }
+}
+
+impl ServiceOperation {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Start => "start",
+            Self::Stop => "stop",
+            Self::Restart => "restart",
+        }
+    }
+}
+
+// Subconjunto conservador de nombres systemd: sin escapes, plantillas vacías ni rutas.
+fn valid_plan_unit(unit: &str) -> bool {
+    if unit.len() > 255 || !unit.ends_with(".service") {
+        return false;
+    }
+    let stem = &unit[..unit.len() - ".service".len()];
+    if stem.is_empty() || stem.starts_with('.') || stem.starts_with('-') {
+        return false;
+    }
+    let mut parts = stem.split('@');
+    let name = parts.next().unwrap_or("");
+    let instance = parts.next();
+    if name.is_empty() || instance == Some("") || parts.next().is_some() {
+        return false;
+    }
+    stem.bytes().all(|b| {
+        b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'.' | b':' | b'@')
+    })
+}
+
+/// Lista exacta para autorizar únicamente la creación de planes; vacía por defecto.
+#[derive(Debug, Default)]
+pub struct PlanAllowlist {
+    units: Vec<String>,
+}
+
+impl PlanAllowlist {
+    pub fn new(units: impl IntoIterator<Item = String>) -> Result<Self, String> {
+        let units: Vec<String> = units.into_iter().collect();
+        if units.iter().any(|unit| !valid_plan_unit(unit)) {
+            return Err("nombre de servicio inválido".into());
+        }
+        Ok(Self { units })
+    }
+
+    pub fn plan(&self, operation: ServiceOperation, unit: &str) -> Result<ServicePlan, String> {
+        if !valid_plan_unit(unit) {
+            return Err("nombre de servicio inválido".into());
+        }
+        if !self.units.iter().any(|allowed| allowed == unit) {
+            return Err("servicio no autorizado para planificación".into());
+        }
+        Ok(ServicePlan { operation, unit: unit.to_owned() })
+    }
+}
+
+/// Descripción en memoria; no tiene ninguna capacidad de ejecución.
+#[derive(Debug, PartialEq, Eq)]
+pub struct ServicePlan {
+    pub operation: ServiceOperation,
+    pub unit: String,
+}
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Service {
@@ -140,6 +225,25 @@ pub fn status(name: &str) -> Result<Service, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn plans_only_exact_allowed_units_and_known_operations() {
+        let empty = PlanAllowlist::default();
+        assert!(empty.plan(ServiceOperation::Start, "demo.service").is_err());
+        let allowed = PlanAllowlist::new(["demo.service".to_owned(), "worker@one.service".to_owned()]).unwrap();
+        for (text, operation) in [("start", ServiceOperation::Start), ("stop", ServiceOperation::Stop), ("restart", ServiceOperation::Restart)] {
+            assert_eq!(text.parse::<ServiceOperation>().unwrap(), operation);
+            assert_eq!(allowed.plan(operation, "demo.service").unwrap(), ServicePlan { operation, unit: "demo.service".into() });
+        }
+        assert!("reload".parse::<ServiceOperation>().is_err());
+        assert!(allowed.plan(ServiceOperation::Stop, "other.service").is_err());
+        assert!(allowed.plan(ServiceOperation::Stop, "worker@one.service").is_ok());
+        for invalid in ["", "demo", ".service", "-x.service", "../x.service", "x@.service", "x@@y.service", "x\\x2fy.service", "x;id.service", "x\n.service"] {
+            assert!(allowed.plan(ServiceOperation::Start, invalid).is_err());
+            assert!(PlanAllowlist::new([invalid.to_owned()]).is_err());
+        }
+        assert!(allowed.plan(ServiceOperation::Start, &format!("{}.service", "a".repeat(248))).is_err());
+    }
 
     #[test]
     fn list_parses_services_and_categories() {
