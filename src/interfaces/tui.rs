@@ -9,10 +9,10 @@ const LIMIT: Duration = Duration::from_secs(10);
 
 type Answer = Result<String, String>;
 struct Worker { view: usize, started: Instant, receiver: Receiver<Answer>, timed_out: bool }
-struct App { selected: usize, view: usize, content: [String; 4], worker: Option<Worker>, row: usize, column: usize }
+struct App { selected: usize, view: usize, content: [String; 4], worker: Option<Worker>, notice: Option<String>, row: usize, column: usize }
 impl App {
     fn new() -> Self {
-        Self { selected: 0, view: 0, content: std::array::from_fn(|_| "Sin consultar. Seleccioná la vista con Enter y pulsá R para consultar.".into()), worker: None, row: 0, column: 0 }
+        Self { selected: 0, view: 0, content: std::array::from_fn(|_| "Sin consultar. Seleccioná la vista con Enter y pulsá R para consultar.".into()), worker: None, notice: None, row: 0, column: 0 }
     }
     // Los límites dependen del contenido actual, no del tamaño anterior de la ventana.
     fn clamp_scroll(&mut self) {
@@ -27,9 +27,10 @@ impl App {
     }
     fn request(&mut self) {
         if self.worker.is_some() {
-            self.content[self.view] = "Hay una consulta anterior en curso; esperá a que termine. No se crean más procesos de consulta.".into();
+            self.notice = Some("Hay una consulta en curso; esperá a que termine".into());
             return;
         }
+        self.notice = None;
         let view = self.view;
         let (sender, receiver) = mpsc::channel();
         match thread::Builder::new().name("javipiv2-query".into()).spawn(move || { let _ = sender.send(query(view)); }) {
@@ -44,17 +45,19 @@ impl App {
         let Some(worker) = self.worker.as_mut() else { return };
         match worker.receiver.try_recv() {
             Ok(answer) => {
+                self.notice = None;
                 let view = worker.view;
                 self.content[view] = match answer { Ok(text) => text, Err(error) => format!("Error de lectura: {error}") };
                 self.worker = None;
             }
             Err(mpsc::TryRecvError::Disconnected) => {
+                self.notice = None;
                 self.content[worker.view] = "Error: la consulta terminó inesperadamente".into();
                 self.worker = None;
             }
             Err(mpsc::TryRecvError::Empty) if !worker.timed_out && worker.started.elapsed() >= LIMIT => {
                 worker.timed_out = true;
-                self.content[worker.view] = "Tiempo de espera agotado; la consulta sigue en segundo plano. No se permiten nuevas consultas hasta que termine.".into();
+                self.content[worker.view] = "Aviso: la consulta lleva diez segundos en curso y no se ha cancelado. No se permiten nuevas consultas hasta que termine.".into();
             }
             Err(mpsc::TryRecvError::Empty) => {}
         }
@@ -156,7 +159,7 @@ pub fn run() -> Result<(), String> {
                 let text = app.visible_content(usize::from(areas[1].height.saturating_sub(2)));
                 frame.render_widget(Paragraph::new(text).block(Block::default().borders(Borders::ALL)
                     .title(format!("{} — ↑↓ menú Enter abrir R consultar Q/Esc salir", NAMES[app.view]))
-                    .title_bottom("j/k vertical · h/l horizontal")), areas[1]);
+                    .title_bottom(app.notice.as_deref().unwrap_or("j/k vertical · h/l horizontal"))), areas[1]);
             })?;
             if event::poll(Duration::from_millis(100))? {
                 if let Event::Key(key) = event::read()? {
@@ -173,6 +176,18 @@ pub fn run() -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn busy_request_preserves_other_view_results() {
+        let mut app = App::new();
+        let (_sender, receiver) = mpsc::channel();
+        app.worker = Some(Worker { view: 0, started: Instant::now(), receiver, timed_out: false });
+        app.view = 1;
+        app.content[1] = "resultados anteriores".into();
+        app.request();
+        assert_eq!(app.content[1], "resultados anteriores");
+        assert!(app.notice.is_some());
+        assert_eq!(app.worker.as_ref().unwrap().view, 0);
+    }
     #[test]
     fn navigation_separates_selection_from_opening() {
         let mut app = App::new();
