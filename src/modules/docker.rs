@@ -171,8 +171,7 @@ mod tests {
     #[test]
     fn parses_only_selected_container_fields() {
         let entries =
-            parse_containers("\"/demo\"\t\"1234567890abcdef\"\t\"image:1\"\t\"exited\"\n")
-                .unwrap();
+            parse_containers("\"/demo\"\t\"1234567890abcdef\"\t\"image:1\"\t\"exited\"\n").unwrap();
         assert_eq!(
             entries[0],
             Container {

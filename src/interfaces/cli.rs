@@ -12,7 +12,9 @@ fn help() {
     );
     println!("Uso: javipiv2 <comando>");
     println!("  status                 Host, uptime, memoria, carga y temperatura");
-    println!("  tui                    Interfaz interactiva de solo lectura (pendiente de validación)");
+    println!(
+        "  tui                    Interfaz interactiva de solo lectura (pendiente de validación)"
+    );
     println!("  module list            Catálogo (no instalaciones reales)");
     println!("  service list           Servicios conocidos por systemd (solo lectura)");
     println!("  service status <nombre>  Estado de un servicio (solo lectura)");
@@ -23,7 +25,9 @@ fn help() {
     println!("  docker inspect <nombre>  Información básica de un contenedor");
     println!("  project list           Inventario Git de solo lectura");
     println!("  project status <nombre>  Información Git del proyecto");
-    println!("  JAVIPIV2_WORKSPACES    Ruta configurable bajo /srv (predeterminada: /srv/workspaces)");
+    println!(
+        "  JAVIPIV2_WORKSPACES    Ruta configurable bajo /srv (predeterminada: /srv/workspaces)"
+    );
     println!("  plan <perfil>          Módulos previstos: minimal, developer, full");
     println!("  simulate minimal       Progreso simulado de solo lectura, sin instalar");
     println!("  simulate minimal --fixture  Simulación con evidencia de stdin");
@@ -57,14 +61,20 @@ fn print_project(project: &projects::Project) {
         projects::GitState::NotGit => "sin Git",
         projects::GitState::Unknown => "unknown",
     };
-    println!("{}: Git={}, rama={}, HEAD={}", project.name, state,
+    println!(
+        "{}: Git={}, rama={}, HEAD={}",
+        project.name,
+        state,
         project.branch.as_deref().unwrap_or("unknown"),
-        project.head.as_deref().unwrap_or("unknown"));
+        project.head.as_deref().unwrap_or("unknown")
+    );
 }
 
 fn projects() -> Result<projects::Projects, String> {
-    projects::Projects::new(std::env::var_os("JAVIPIV2_WORKSPACES")
-        .unwrap_or_else(|| OsString::from("/srv/workspaces")))
+    projects::Projects::new(
+        std::env::var_os("JAVIPIV2_WORKSPACES")
+            .unwrap_or_else(|| OsString::from("/srv/workspaces")),
+    )
 }
 
 pub fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), String> {
@@ -120,8 +130,12 @@ pub fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), String> {
         ["docker", "inspect", name] => print_container(&docker::inspect(name)?),
         ["project", "list"] => {
             let entries = projects()?.list()?;
-            if entries.is_empty() { println!("No hay proyectos"); }
-            for entry in &entries { print_project(entry); }
+            if entries.is_empty() {
+                println!("No hay proyectos");
+            }
+            for entry in &entries {
+                print_project(entry);
+            }
         }
         ["project", "status", name] => print_project(&projects()?.status(name)?),
         ["service", "list"] => {
@@ -135,7 +149,11 @@ pub fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), String> {
             let operation = operation.parse::<services::ServiceOperation>()?;
             let allowlist = services::PlanAllowlist::new([(*allowed).to_owned()])?;
             let plan = allowlist.plan(operation, unit)?;
-            println!("Plan solicitado (no ejecutado): {} en {}", plan.operation.as_str(), plan.unit);
+            println!(
+                "Plan solicitado (no ejecutado): {} en {}",
+                plan.operation.as_str(),
+                plan.unit
+            );
         }
         ["service", "plan", operation, unit] => {
             let operation = operation.parse::<services::ServiceOperation>()?;
@@ -209,11 +227,43 @@ mod tests {
     #[test]
     fn service_plans_require_explicit_exact_allowlist() {
         let call = |args: Vec<&str>| run(args.into_iter().map(OsString::from));
-        assert!(call(vec!["service", "plan", "restart", "demo.service", "--allow", "demo.service"]).is_ok());
+        assert!(call(vec![
+            "service",
+            "plan",
+            "restart",
+            "demo.service",
+            "--allow",
+            "demo.service"
+        ])
+        .is_ok());
         assert!(call(vec!["service", "plan", "start", "demo.service"]).is_err());
-        assert!(call(vec!["service", "plan", "stop", "demo.service", "--allow", "other.service"]).is_err());
-        assert!(call(vec!["service", "plan", "reload", "demo.service", "--allow", "demo.service"]).is_err());
-        assert!(call(vec!["service", "plan", "start", "../demo.service", "--allow", "../demo.service"]).is_err());
+        assert!(call(vec![
+            "service",
+            "plan",
+            "stop",
+            "demo.service",
+            "--allow",
+            "other.service"
+        ])
+        .is_err());
+        assert!(call(vec![
+            "service",
+            "plan",
+            "reload",
+            "demo.service",
+            "--allow",
+            "demo.service"
+        ])
+        .is_err());
+        assert!(call(vec![
+            "service",
+            "plan",
+            "start",
+            "../demo.service",
+            "--allow",
+            "../demo.service"
+        ])
+        .is_err());
     }
 
     #[test]

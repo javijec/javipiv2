@@ -49,9 +49,8 @@ fn valid_plan_unit(unit: &str) -> bool {
     if name.is_empty() || instance == Some("") || parts.next().is_some() {
         return false;
     }
-    stem.bytes().all(|b| {
-        b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'.' | b':' | b'@')
-    })
+    stem.bytes()
+        .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'.' | b':' | b'@'))
 }
 
 /// Lista exacta para autorizar únicamente la creación de planes; vacía por defecto.
@@ -76,7 +75,10 @@ impl PlanAllowlist {
         if !self.units.iter().any(|allowed| allowed == unit) {
             return Err("servicio no autorizado para planificación".into());
         }
-        Ok(ServicePlan { operation, unit: unit.to_owned() })
+        Ok(ServicePlan {
+            operation,
+            unit: unit.to_owned(),
+        })
     }
 }
 
@@ -230,19 +232,51 @@ mod tests {
     fn plans_only_exact_allowed_units_and_known_operations() {
         let empty = PlanAllowlist::default();
         assert!(empty.plan(ServiceOperation::Start, "demo.service").is_err());
-        let allowed = PlanAllowlist::new(["demo.service".to_owned(), "worker@one.service".to_owned()]).unwrap();
-        for (text, operation) in [("start", ServiceOperation::Start), ("stop", ServiceOperation::Stop), ("restart", ServiceOperation::Restart)] {
+        let allowed =
+            PlanAllowlist::new(["demo.service".to_owned(), "worker@one.service".to_owned()])
+                .unwrap();
+        for (text, operation) in [
+            ("start", ServiceOperation::Start),
+            ("stop", ServiceOperation::Stop),
+            ("restart", ServiceOperation::Restart),
+        ] {
             assert_eq!(text.parse::<ServiceOperation>().unwrap(), operation);
-            assert_eq!(allowed.plan(operation, "demo.service").unwrap(), ServicePlan { operation, unit: "demo.service".into() });
+            assert_eq!(
+                allowed.plan(operation, "demo.service").unwrap(),
+                ServicePlan {
+                    operation,
+                    unit: "demo.service".into()
+                }
+            );
         }
         assert!("reload".parse::<ServiceOperation>().is_err());
-        assert!(allowed.plan(ServiceOperation::Stop, "other.service").is_err());
-        assert!(allowed.plan(ServiceOperation::Stop, "worker@one.service").is_ok());
-        for invalid in ["", "demo", ".service", "-x.service", "../x.service", "x@.service", "x@@y.service", "x\\x2fy.service", "x;id.service", "x\n.service"] {
+        assert!(allowed
+            .plan(ServiceOperation::Stop, "other.service")
+            .is_err());
+        assert!(allowed
+            .plan(ServiceOperation::Stop, "worker@one.service")
+            .is_ok());
+        for invalid in [
+            "",
+            "demo",
+            ".service",
+            "-x.service",
+            "../x.service",
+            "x@.service",
+            "x@@y.service",
+            "x\\x2fy.service",
+            "x;id.service",
+            "x\n.service",
+        ] {
             assert!(allowed.plan(ServiceOperation::Start, invalid).is_err());
             assert!(PlanAllowlist::new([invalid.to_owned()]).is_err());
         }
-        assert!(allowed.plan(ServiceOperation::Start, &format!("{}.service", "a".repeat(248))).is_err());
+        assert!(allowed
+            .plan(
+                ServiceOperation::Start,
+                &format!("{}.service", "a".repeat(248))
+            )
+            .is_err());
     }
 
     #[test]

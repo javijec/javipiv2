@@ -63,7 +63,9 @@ pub fn parse_load_average(raw: &str) -> Option<[String; 3]> {
 
 /// Accept only one explicitly identified CPU thermal zone with a valid reading.
 pub fn parse_cpu_temperature(zones: &[(String, Option<String>)]) -> Option<i64> {
-    let mut cpu_zones = zones.iter().filter(|(kind, _)| kind.trim() == "cpu-thermal");
+    let mut cpu_zones = zones
+        .iter()
+        .filter(|(kind, _)| kind.trim() == "cpu-thermal");
     let (_, temperature) = cpu_zones.next()?;
     if cpu_zones.next().is_some() {
         return None;
@@ -184,8 +186,8 @@ mod tests {
 
     #[test]
     fn status_rejects_impossible_memory() {
-        let status = parse_status("pi\n", "20.1 4.5", "MemTotal: 100 kB\nMemAvailable: 70 kB")
-            .unwrap();
+        let status =
+            parse_status("pi\n", "20.1 4.5", "MemTotal: 100 kB\nMemAvailable: 70 kB").unwrap();
         assert_eq!(status.hostname, "pi");
         assert_eq!(status.uptime_seconds, 20);
         assert_eq!(status.memory_total_kib, 100);
