@@ -33,30 +33,42 @@ fn unescape_mount_field(field: &str) -> Option<String> {
 
 /// Interpreta evidencia suministrada; false significa desconocido, no ausencia.
 pub fn inspect(raw: &str) -> StorageStatus {
+    inspect_inner(raw, false).unwrap_or_default()
+}
+
+/// Interpreta mountinfo y rechaza evidencia estructuralmente inválida.
+pub fn inspect_checked(raw: &str) -> Result<StorageStatus, &'static str> {
+    inspect_inner(raw, true)
+}
+
+fn inspect_inner(raw: &str, checked: bool) -> Result<StorageStatus, &'static str> {
+    if raw.is_empty() {
+        return Err("mountinfo vacío");
+    }
     let mut result = StorageStatus::default();
     let mut ids = HashSet::new();
     let mut entries = Vec::new();
     for line in raw.lines() {
         let Some((left, right)) = line.split_once(" - ") else {
-            return StorageStatus::default();
+            return Err("línea de mountinfo inválida");
         };
         let fields: Vec<_> = left.split_whitespace().collect();
         let after: Vec<_> = right.split_whitespace().collect();
         if fields.len() < 6 || after.len() < 3 {
-            return StorageStatus::default();
+            return Err("línea de mountinfo inválida");
         }
         let (Ok(id), Ok(parent)) = (fields[0].parse::<u64>(), fields[1].parse::<u64>()) else {
-            return StorageStatus::default();
+            return Err("identificadores de mountinfo inválidos");
         };
         if id == 0 || parent == 0 || !ids.insert(id) {
-            return StorageStatus::default();
+            return Err("identificadores de mountinfo inválidos");
         }
         let mount = unescape_mount_field(fields[4]);
         let root = unescape_mount_field(fields[3]);
         // Malformed unrelated paths are ignored; malformed /srv candidates invalidate evidence.
         let Some(mount) = mount else {
             if fields[4].starts_with('/') {
-                return StorageStatus::default();
+                return Err("ruta de montaje inválida");
             }
             continue;
         };
@@ -64,8 +76,11 @@ pub fn inspect(raw: &str) -> StorageStatus {
             continue;
         }
         let Some(root) = root else {
-            if mount == "/srv" || mount.starts_with("/srv/") {
-                return StorageStatus::default();
+            if mount == "/srv"
+                || mount.starts_with("/srv/")
+                || (checked && after[0] == "overlay" && mount.starts_with("/var/lib/docker/"))
+            {
+                return Err("raíz de montaje inválida");
             }
             continue;
         };
@@ -94,7 +109,7 @@ pub fn inspect(raw: &str) -> StorageStatus {
         }
     }
     result.docker_overlays.sort();
-    result
+    Ok(result)
 }
 
 fn is_ext4(entry: &(u64, u64, String, String, &str, &str, &str)) -> bool {
@@ -110,4 +125,10 @@ pub fn read_status() -> StorageStatus {
     std::fs::read_to_string("/proc/self/mountinfo")
         .map(|raw| inspect(&raw))
         .unwrap_or_default()
+}
+
+/// Lectura explícita de mountinfo que conserva errores de I/O y parseo.
+pub fn read_status_fallible() -> Result<StorageStatus, String> {
+    let raw = std::fs::read_to_string("/proc/self/mountinfo").map_err(|error| error.to_string())?;
+    inspect_checked(&raw).map_err(str::to_owned)
 }

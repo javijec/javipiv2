@@ -1,5 +1,5 @@
 //! Interfaz de observación; las consultas se ejecutan fuera del hilo de entrada.
-use crate::modules::{docker, health, projects, services};
+use crate::modules::{docker, health, projects, services, storage};
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind},
     execute,
@@ -19,7 +19,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-const NAMES: [&str; 4] = ["Health", "Services", "Docker", "Projects"];
+const NAMES: [&str; 5] = ["Health", "Services", "Docker", "Projects", "Storage"];
 const LIMIT: Duration = Duration::from_secs(10);
 
 #[derive(Debug)]
@@ -28,11 +28,13 @@ enum Data {
     Services(Vec<services::Service>),
     Docker(Vec<docker::Container>),
     Projects(Vec<projects::Project>),
+    Storage(storage::StorageStatus),
 }
 impl Data {
     fn len(&self) -> usize {
         match self {
             Self::Health(_) => 0,
+            Self::Storage(_) => 1,
             Self::Services(v) => v.len(),
             Self::Docker(v) => v.len(),
             Self::Projects(v) => v.len(),
@@ -47,6 +49,15 @@ impl Data {
         };
         match self {
             Self::Health(_) => None,
+            Self::Storage(status) => (index == 0).then(|| {
+                format!(
+                    "Autofs en /srv: {}\nMontaje ext4 activo: {}\nPunto de montaje ext4: {}\nOverlays Docker reconocidos: {}",
+                    if status.autofs { "identificado" } else { "desconocido" },
+                    if status.srv_ext4 { "identificado" } else { "desconocido" },
+                    if status.srv_ext4 { "/srv" } else { "desconocido" },
+                    status.docker_overlays.len()
+                )
+            }),
             Self::Services(v) => v.get(index).map(|e| {
                 if detail {
                     format!(
@@ -105,6 +116,7 @@ fn query_error(view: usize) -> &'static str {
         1 => "Error al consultar servicios (systemd); datos anteriores",
         2 => "Error al consultar Docker; datos anteriores",
         3 => "Error al consultar Projects; datos anteriores",
+        4 => "Error al consultar Storage (/proc/self/mountinfo); datos anteriores",
         _ => "Error al consultar vista; datos anteriores",
     }
 }
@@ -117,16 +129,16 @@ struct Worker {
 struct App {
     selected: usize,
     view: usize,
-    content: [String; 4],
-    data: [Option<Data>; 4],
-    status: [Option<String>; 4],
+    content: [String; 5],
+    data: [Option<Data>; 5],
+    status: [Option<String>; 5],
     worker: Option<Worker>,
     notice: Option<String>,
     row: usize,
     column: usize,
     list_row: usize,
     list_column: usize,
-    item: [usize; 4],
+    item: [usize; 5],
     table_focus: bool,
     detail: bool,
     height: usize,
@@ -147,7 +159,7 @@ impl App {
             column: 0,
             list_row: 0,
             list_column: 0,
-            item: [0; 4],
+            item: [0; 5],
             table_focus: false,
             detail: false,
             height: 0,
@@ -243,6 +255,9 @@ impl App {
             .join("\n")
     }
     fn request(&mut self) {
+        self.request_with(query);
+    }
+    fn request_with(&mut self, query_fn: fn(usize) -> Answer) {
         if self.worker.is_some() {
             self.notice = Some("Hay una consulta en curso; esperá a que termine".into());
             return;
@@ -253,7 +268,7 @@ impl App {
         match thread::Builder::new()
             .name("javipiv2-query".into())
             .spawn(move || {
-                let _ = sender.send(query(view));
+                let _ = sender.send(query_fn(view));
             }) {
             Ok(_) => {
                 self.status[view] = Some("Consultando… (datos anteriores)".into());
@@ -313,6 +328,9 @@ impl App {
         }
     }
     fn key(&mut self, key: KeyCode) -> bool {
+        self.key_with(key, query)
+    }
+    fn key_with(&mut self, key: KeyCode, query_fn: fn(usize) -> Answer) -> bool {
         match key {
             KeyCode::Char('q' | 'Q') => return false,
             KeyCode::Esc if self.detail => {
@@ -368,7 +386,7 @@ impl App {
             KeyCode::Char('k') => self.row = self.row.saturating_sub(1),
             KeyCode::Char('l') => self.column = self.column.saturating_add(1),
             KeyCode::Char('h') => self.column = self.column.saturating_sub(1),
-            KeyCode::Char('r' | 'R') => self.request(),
+            KeyCode::Char('r' | 'R') => self.request_with(query_fn),
             _ => {}
         }
         self.clamp_scroll();
@@ -407,6 +425,7 @@ fn query(view: usize) -> Answer {
                 .list()
                 .map(Data::Projects)
         }
+        4 => storage::read_status_fallible().map(Data::Storage),
         _ => Err("vista desconocida".into()),
     }
 }
@@ -501,6 +520,70 @@ mod tests {
             sub: None,
         }
     }
+    fn synthetic_storage_query(_: usize) -> Answer {
+        Ok(Data::Storage(storage::StorageStatus {
+            autofs: false,
+            srv_ext4: true,
+            docker_overlays: vec!["/srv/docker/overlay".into()],
+        }))
+    }
+
+    #[test]
+    fn storage_is_manual_unknown_safe_and_preserves_navigation() {
+        let mut app = App::new();
+        for _ in 0..4 {
+            app.key(KeyCode::Down);
+        }
+        app.key(KeyCode::Enter);
+        assert_eq!(app.view, 4);
+        assert!(app.worker.is_none());
+        assert!(app.text().contains("Sin consultar"));
+        app.data[4] = Some(Data::Storage(storage::StorageStatus::default()));
+        let text = app.text();
+        assert!(text.contains("Autofs en /srv: desconocido"));
+        assert!(text.contains("Montaje ext4 activo: desconocido"));
+        assert!(text.contains("Punto de montaje ext4: desconocido"));
+        assert!(text.contains("Overlays Docker reconocidos: 0"));
+        app.data[4] = Some(Data::Storage(storage::StorageStatus {
+            autofs: true,
+            srv_ext4: true,
+            docker_overlays: vec!["/srv/docker/a".into(), "/var/lib/docker/b".into()],
+        }));
+        let text = app.text();
+        assert!(text.contains("Autofs en /srv: identificado"));
+        assert!(text.contains("Punto de montaje ext4: /srv"));
+        assert!(text.contains("Overlays Docker reconocidos: 2"));
+        app.data[4] = None;
+        app.key_with(KeyCode::Char('R'), synthetic_storage_query);
+        assert_eq!(app.worker.as_ref().map(|worker| worker.view), Some(4));
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while app.worker.is_some() && Instant::now() < deadline {
+            app.update();
+            thread::yield_now();
+        }
+        assert!(app.worker.is_none(), "Storage query did not complete");
+        assert!(app.text().contains("Overlays Docker reconocidos: 1"));
+    }
+
+    #[test]
+    fn storage_query_error_is_view_specific_and_hides_details() {
+        let mut app = App::new();
+        app.view = 4;
+        let (sender, receiver) = mpsc::channel();
+        app.worker = Some(Worker {
+            view: 4,
+            started: Instant::now(),
+            receiver,
+            timed_out: false,
+        });
+        sender.send(Err("raw parser detail".into())).unwrap();
+        app.update();
+        assert!(app
+            .text()
+            .contains("Error al consultar Storage (/proc/self/mountinfo)"));
+        assert!(!app.text().contains("raw parser detail"));
+    }
+
     #[test]
     fn selection_detail_and_empty_list() {
         let mut app = App::new();
