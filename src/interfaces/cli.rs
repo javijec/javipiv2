@@ -40,6 +40,30 @@ fn help() {
     println!("  help                   Esta ayuda");
 }
 
+fn format_bytes(bytes: u64) -> String {
+    const UNITS: [&str; 5] = ["B", "KiB", "MiB", "GiB", "TiB"];
+    let mut value = bytes as f64;
+    let mut unit = 0;
+    while value >= 1024.0 && unit + 1 < UNITS.len() {
+        value /= 1024.0;
+        unit += 1;
+    }
+    format!("{value:.1} {}", UNITS[unit])
+}
+
+fn format_storage_capacity(capacity: Option<storage::Capacity>) -> String {
+    match capacity {
+        Some(capacity) => format!(
+            "Capacidad /srv: total={}, usada={}, disponible={}, reservada={}",
+            format_bytes(capacity.total_bytes),
+            format_bytes(capacity.used_bytes),
+            format_bytes(capacity.available_bytes),
+            format_bytes(capacity.reserved_bytes)
+        ),
+        None => "Capacidad /srv: desconocido".into(),
+    }
+}
+
 fn print_service(service: &services::Service) {
     println!(
         "{}: carga={}, actividad={}, subestado={}, categoría={}",
@@ -144,7 +168,7 @@ pub fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), String> {
             println!("Resultado del último intento: desconocido");
         }
         ["storage", "status"] => {
-            let status = storage::read_status();
+            let (status, capacity) = storage::read_capacity().unwrap_or_default();
             println!(
                 "/srv autofs: {}",
                 if status.autofs {
@@ -170,6 +194,7 @@ pub fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), String> {
             for path in status.docker_overlays {
                 println!("Overlay Docker: {path} (overlay)");
             }
+            println!("{}", format_storage_capacity(capacity));
         }
         ["docker", "status"] => {
             docker::status()?;
@@ -268,6 +293,25 @@ pub fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), String> {
 mod tests {
     use super::run;
     use std::ffi::OsString;
+
+    #[test]
+    fn storage_capacity_rendering_is_exact() {
+        use crate::modules::storage::Capacity;
+        let capacity = Capacity {
+            total_bytes: 1000,
+            used_bytes: 600,
+            available_bytes: 300,
+            reserved_bytes: 100,
+        };
+        assert_eq!(
+            super::format_storage_capacity(Some(capacity)),
+            "Capacidad /srv: total=1000.0 B, usada=600.0 B, disponible=300.0 B, reservada=100.0 B"
+        );
+        assert_eq!(
+            super::format_storage_capacity(None),
+            "Capacidad /srv: desconocido"
+        );
+    }
 
     #[test]
     fn known_read_only_commands() {

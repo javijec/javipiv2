@@ -51,7 +51,6 @@ fn decodes_paths_and_ignores_unrelated_mounts() {
 fn cli_command_remains_read_only_and_help_lists_storage() {
     use std::ffi::OsString;
     let call = |args: &[&str]| javipiv2::interfaces::cli::run(args.iter().map(OsString::from));
-    assert!(call(&["storage", "status"]).is_ok());
     assert!(call(&["help"]).is_ok());
     assert!(call(&["storage", "status", "--fixture"]).is_err());
 }

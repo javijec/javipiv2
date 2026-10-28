@@ -8,6 +8,72 @@ pub struct StorageStatus {
     pub docker_overlays: Vec<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Capacity {
+    pub total_bytes: u64,
+    pub used_bytes: u64,
+    pub available_bytes: u64,
+    pub reserved_bytes: u64,
+}
+
+/// f_bavail excludes blocks reserved for privileged use; all byte arithmetic is checked.
+pub fn capacity_from_blocks(
+    blocks: u64,
+    free: u64,
+    available: u64,
+    fragment_size: u64,
+) -> Option<Capacity> {
+    if fragment_size == 0 || free > blocks || available > free {
+        return None;
+    }
+    let total_bytes = blocks.checked_mul(fragment_size)?;
+    let free_bytes = free.checked_mul(fragment_size)?;
+    let available_bytes = available.checked_mul(fragment_size)?;
+    Some(Capacity {
+        total_bytes,
+        used_bytes: total_bytes.checked_sub(free_bytes)?,
+        available_bytes,
+        reserved_bytes: free_bytes.checked_sub(available_bytes)?,
+    })
+}
+
+/// Calls the getter only when mountinfo unambiguously confirms active ext4 at /srv.
+pub fn observe_capacity<E>(
+    raw: &str,
+    getter: impl FnOnce() -> Result<Capacity, E>,
+) -> Result<(StorageStatus, Option<Capacity>), String> {
+    let status = inspect_checked(raw).map_err(str::to_owned)?;
+    if !status.srv_ext4 {
+        return Ok((status, None));
+    }
+    let capacity = getter().ok();
+    Ok((status, capacity))
+}
+
+#[allow(clippy::unnecessary_cast)] // statvfs field widths vary across Unix targets.
+fn stat_capacity() -> Result<Capacity, String> {
+    let path = std::ffi::CString::new("/srv").expect("static path");
+    let mut stats = std::mem::MaybeUninit::<libc::statvfs>::uninit();
+    // Lookup may activate autofs; mountinfo confirmation remains subject to TOCTOU.
+    if unsafe { libc::statvfs(path.as_ptr(), stats.as_mut_ptr()) } != 0 {
+        return Err(std::io::Error::last_os_error().to_string());
+    }
+    let stats = unsafe { stats.assume_init() };
+    capacity_from_blocks(
+        stats.f_blocks as u64,
+        stats.f_bfree as u64,
+        stats.f_bavail as u64,
+        stats.f_frsize as u64,
+    )
+    .ok_or_else(|| "estadísticas de capacidad inválidas".into())
+}
+
+/// Fails closed on mountinfo read/parse errors; capacity errors become unknown without retry.
+pub fn read_capacity() -> Result<(StorageStatus, Option<Capacity>), String> {
+    let raw = std::fs::read_to_string("/proc/self/mountinfo").map_err(|e| e.to_string())?;
+    observe_capacity(&raw, stat_capacity)
+}
+
 fn unescape_mount_field(field: &str) -> Option<String> {
     let bytes = field.as_bytes();
     let mut decoded = Vec::with_capacity(bytes.len());

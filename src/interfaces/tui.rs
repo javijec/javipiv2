@@ -28,13 +28,13 @@ enum Data {
     Services(Vec<services::Service>),
     Docker(Vec<docker::Container>),
     Projects(Vec<projects::Project>),
-    Storage(storage::StorageStatus),
+    Storage(storage::StorageStatus, Option<storage::Capacity>),
 }
 impl Data {
     fn len(&self) -> usize {
         match self {
             Self::Health(_) => 0,
-            Self::Storage(_) => 1,
+            Self::Storage(_, _) => 1,
             Self::Services(v) => v.len(),
             Self::Docker(v) => v.len(),
             Self::Projects(v) => v.len(),
@@ -49,13 +49,15 @@ impl Data {
         };
         match self {
             Self::Health(_) => None,
-            Self::Storage(status) => (index == 0).then(|| {
+            Self::Storage(status, capacity) => (index == 0).then(|| {
+                let capacity = capacity.map_or_else(|| "desconocido".to_owned(), |c| format!(
+                    "total={} B, usada={} B, disponible={} B, reservada={} B", c.total_bytes, c.used_bytes, c.available_bytes, c.reserved_bytes));
                 format!(
-                    "Autofs en /srv: {}\nMontaje ext4 activo: {}\nPunto de montaje ext4: {}\nOverlays Docker reconocidos: {}",
+                    "Autofs en /srv: {}\nMontaje ext4 activo: {}\nPunto de montaje ext4: {}\nOverlays Docker reconocidos: {}\nCapacidad /srv: {}",
                     if status.autofs { "identificado" } else { "desconocido" },
                     if status.srv_ext4 { "identificado" } else { "desconocido" },
                     if status.srv_ext4 { "/srv" } else { "desconocido" },
-                    status.docker_overlays.len()
+                    status.docker_overlays.len(), capacity
                 )
             }),
             Self::Services(v) => v.get(index).map(|e| {
@@ -425,7 +427,7 @@ fn query(view: usize) -> Answer {
                 .list()
                 .map(Data::Projects)
         }
-        4 => storage::read_status_fallible().map(Data::Storage),
+        4 => storage::read_capacity().map(|(status, capacity)| Data::Storage(status, capacity)),
         _ => Err("vista desconocida".into()),
     }
 }
@@ -521,11 +523,38 @@ mod tests {
         }
     }
     fn synthetic_storage_query(_: usize) -> Answer {
-        Ok(Data::Storage(storage::StorageStatus {
-            autofs: false,
-            srv_ext4: true,
-            docker_overlays: vec!["/srv/docker/overlay".into()],
-        }))
+        Ok(Data::Storage(
+            storage::StorageStatus {
+                autofs: false,
+                srv_ext4: true,
+                docker_overlays: vec!["/srv/docker/overlay".into()],
+            },
+            None,
+        ))
+    }
+
+    #[test]
+    fn storage_capacity_rendering_is_exact() {
+        let status = storage::StorageStatus::default();
+        let capacity = storage::Capacity {
+            total_bytes: 1000,
+            used_bytes: 600,
+            available_bytes: 300,
+            reserved_bytes: 100,
+        };
+        let prefix = "Autofs en /srv: desconocido\nMontaje ext4 activo: desconocido\nPunto de montaje ext4: desconocido\nOverlays Docker reconocidos: 0\nCapacidad /srv: ";
+        assert_eq!(
+            Data::Storage(status, Some(capacity))
+                .line(0, false)
+                .unwrap(),
+            format!("{prefix}total=1000 B, usada=600 B, disponible=300 B, reservada=100 B")
+        );
+        assert_eq!(
+            Data::Storage(storage::StorageStatus::default(), None)
+                .line(0, false)
+                .unwrap(),
+            format!("{prefix}desconocido")
+        );
     }
 
     #[test]
@@ -538,17 +567,20 @@ mod tests {
         assert_eq!(app.view, 4);
         assert!(app.worker.is_none());
         assert!(app.text().contains("Sin consultar"));
-        app.data[4] = Some(Data::Storage(storage::StorageStatus::default()));
+        app.data[4] = Some(Data::Storage(storage::StorageStatus::default(), None));
         let text = app.text();
         assert!(text.contains("Autofs en /srv: desconocido"));
         assert!(text.contains("Montaje ext4 activo: desconocido"));
         assert!(text.contains("Punto de montaje ext4: desconocido"));
         assert!(text.contains("Overlays Docker reconocidos: 0"));
-        app.data[4] = Some(Data::Storage(storage::StorageStatus {
-            autofs: true,
-            srv_ext4: true,
-            docker_overlays: vec!["/srv/docker/a".into(), "/var/lib/docker/b".into()],
-        }));
+        app.data[4] = Some(Data::Storage(
+            storage::StorageStatus {
+                autofs: true,
+                srv_ext4: true,
+                docker_overlays: vec!["/srv/docker/a".into(), "/var/lib/docker/b".into()],
+            },
+            None,
+        ));
         let text = app.text();
         assert!(text.contains("Autofs en /srv: identificado"));
         assert!(text.contains("Punto de montaje ext4: /srv"));
