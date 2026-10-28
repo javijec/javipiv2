@@ -66,8 +66,11 @@ fn command(program: &str, args: &[&str]) -> Result<String, String> {
     String::from_utf8(output.stdout).map_err(|_| "consulta fallida: respuesta no UTF-8".into())
 }
 
-fn unit_state(unit: &str) -> Result<(Option<String>, Option<String>), String> {
-    let raw = command(
+fn unit_state_with(
+    run: &mut impl FnMut(&str, &[&str]) -> Result<String, String>,
+    unit: &str,
+) -> Result<(Option<String>, Option<String>), String> {
+    let raw = run(
         "systemctl",
         &[
             "--system",
@@ -92,9 +95,16 @@ fn unit_state(unit: &str) -> Result<(Option<String>, Option<String>), String> {
 }
 
 /// A state check cannot eliminate a race with changes before the socket connection.
-fn preflight() -> Result<(), String> {
-    command("docker", &["--version"])?;
-    let (load, active) = unit_state("docker.service")?;
+fn socket_is_admissible(load: Option<&str>, active: Option<&str>) -> bool {
+    load == Some("not-found")
+        || (load == Some("loaded") && matches!(active, Some("active" | "inactive")))
+}
+
+fn preflight_with(
+    run: &mut impl FnMut(&str, &[&str]) -> Result<String, String>,
+) -> Result<(), String> {
+    run("docker", &["--version"])?;
+    let (load, active) = unit_state_with(run, "docker.service")?;
     if load.as_deref() == Some("not-found") {
         return Err("Docker no disponible: unidad docker.service no encontrada".into());
     }
@@ -106,41 +116,60 @@ fn preflight() -> Result<(), String> {
         Some("inactive" | "failed") => return Err("daemon Docker detenido".into()),
         _ => return Err("consulta fallida: estado del daemon desconocido".into()),
     }
-    let (load, active) = unit_state("docker.socket")?;
-    if load.as_deref() == Some("not-found")
-        || (load.as_deref() == Some("loaded") && active.as_deref() == Some("inactive"))
-    {
+    let (load, active) = unit_state_with(run, "docker.socket")?;
+    if socket_is_admissible(load.as_deref(), active.as_deref()) {
         Ok(())
     } else {
-        Err("consulta no segura: docker.socket activo o estado desconocido".into())
+        Err("consulta no segura: estado de docker.socket no permitido".into())
     }
 }
 
-fn docker(args: &[&str]) -> Result<String, String> {
+fn docker_with(
+    run: &mut impl FnMut(&str, &[&str]) -> Result<String, String>,
+    args: &[&str],
+) -> Result<String, String> {
     let mut fixed = vec!["--host", HOST, "--config", "/dev/null"];
     fixed.extend_from_slice(args);
-    command("docker", &fixed)
+    run("docker", &fixed)
 }
 
-pub fn status() -> Result<(), String> {
-    preflight()?;
-    docker(&["info", "--format", "{{.ServerVersion}}"])?;
+fn status_with(
+    run: &mut impl FnMut(&str, &[&str]) -> Result<String, String>,
+) -> Result<(), String> {
+    preflight_with(run)?;
+    docker_with(run, &["info", "--format", "{{.ServerVersion}}"])?;
     Ok(())
 }
 
-pub fn list() -> Result<Vec<Container>, String> {
-    preflight()?;
-    let raw = docker(&[
-        "ps",
-        "--all",
-        "--no-trunc",
-        "--format",
-        "{{json .Names}}\t{{json .ID}}\t{{json .Image}}\t{{json .State}}",
-    ])?;
+pub fn status() -> Result<(), String> {
+    status_with(&mut command)
+}
+
+fn list_with(
+    run: &mut impl FnMut(&str, &[&str]) -> Result<String, String>,
+) -> Result<Vec<Container>, String> {
+    preflight_with(run)?;
+    let raw = docker_with(
+        run,
+        &[
+            "ps",
+            "--all",
+            "--no-trunc",
+            "--format",
+            "{{json .Names}}\t{{json .ID}}\t{{json .Image}}\t{{json .State}}",
+        ],
+    )?;
     parse_containers(&raw)
 }
 
-pub fn inspect(name: &str) -> Result<Container, String> {
+pub fn list() -> Result<Vec<Container>, String> {
+    list_with(&mut command)
+}
+
+fn inspect_with(
+    run: &mut impl FnMut(&str, &[&str]) -> Result<String, String>,
+    name: &str,
+) -> Result<Container, String> {
     if name.is_empty()
         || !name
             .bytes()
@@ -149,14 +178,17 @@ pub fn inspect(name: &str) -> Result<Container, String> {
     {
         return Err("nombre de contenedor inválido".into());
     }
-    preflight()?;
-    let raw = docker(&[
-        "inspect",
-        "--format",
-        "{{json .Name}}\t{{json .Id}}\t{{json .Config.Image}}\t{{json .State.Status}}",
-        "--",
-        name,
-    ])?;
+    preflight_with(run)?;
+    let raw = docker_with(
+        run,
+        &[
+            "inspect",
+            "--format",
+            "{{json .Name}}\t{{json .Id}}\t{{json .Config.Image}}\t{{json .State.Status}}",
+            "--",
+            name,
+        ],
+    )?;
     let mut containers = parse_containers(&raw)?;
     if containers.len() != 1 {
         return Err("consulta fallida: respuesta de contenedor inesperada".into());
@@ -164,9 +196,161 @@ pub fn inspect(name: &str) -> Result<Container, String> {
     Ok(containers.remove(0))
 }
 
+pub fn inspect(name: &str) -> Result<Container, String> {
+    inspect_with(&mut command, name)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[derive(Clone, Copy)]
+    struct State<'a> {
+        service_load: &'a str,
+        service_active: &'a str,
+        socket_load: &'a str,
+        socket_active: &'a str,
+    }
+
+    fn runner<'a>(
+        state: State<'a>,
+        calls: &'a mut Vec<(String, Vec<String>)>,
+    ) -> impl FnMut(&str, &[&str]) -> Result<String, String> + 'a {
+        move |program, args| {
+            calls.push((
+                program.to_owned(),
+                args.iter().map(|arg| (*arg).to_owned()).collect(),
+            ));
+            match program {
+                "systemctl" => {
+                    let unit = args[args.len() - 1];
+                    let (load, active) = if unit == "docker.service" {
+                        (state.service_load, state.service_active)
+                    } else {
+                        (state.socket_load, state.socket_active)
+                    };
+                    Ok(format!("LoadState={load}\nActiveState={active}\n"))
+                }
+                "docker" if args == ["--version"] => Ok("Docker version test\n".into()),
+                "docker" => Ok(match args.get(4).copied() {
+                    Some("info") => "27.0\n".into(),
+                    Some("ps") => {
+                        "\"/demo\"\t\"1234567890abcdef\"\t\"image:1\"\t\"running\"\n".into()
+                    }
+                    Some("inspect") => {
+                        "\"/demo\"\t\"1234567890abcdef\"\t\"image:1\"\t\"running\"\n".into()
+                    }
+                    _ => panic!("unexpected Docker args: {args:?}"),
+                }),
+                _ => panic!("unexpected program {program}"),
+            }
+        }
+    }
+
+    fn assert_no_daemon(calls: &[(String, Vec<String>)]) {
+        assert!(!calls
+            .iter()
+            .any(|(program, args)| program == "docker"
+                && args.first() != Some(&"--version".to_owned())));
+    }
+
+    #[test]
+    fn active_socket_allows_only_fixed_read_only_operations() {
+        let state = State {
+            service_load: "loaded",
+            service_active: "active",
+            socket_load: "loaded",
+            socket_active: "active",
+        };
+        let mut calls = vec![];
+        assert!(status_with(&mut runner(state, &mut calls)).is_ok());
+        assert!(list_with(&mut runner(state, &mut calls)).is_ok());
+        assert!(inspect_with(&mut runner(state, &mut calls), "demo").is_ok());
+        let daemon_calls = calls
+            .iter()
+            .filter(|(program, args)| {
+                program == "docker" && args.first() != Some(&"--version".to_owned())
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(daemon_calls, vec![
+            &("docker".into(), vec!["--host", HOST, "--config", "/dev/null", "info", "--format", "{{.ServerVersion}}"].into_iter().map(str::to_owned).collect()),
+            &("docker".into(), vec!["--host", HOST, "--config", "/dev/null", "ps", "--all", "--no-trunc", "--format", "{{json .Names}}\t{{json .ID}}\t{{json .Image}}\t{{json .State}}"].into_iter().map(str::to_owned).collect()),
+            &("docker".into(), vec!["--host", HOST, "--config", "/dev/null", "inspect", "--format", "{{json .Name}}\t{{json .Id}}\t{{json .Config.Image}}\t{{json .State.Status}}", "--", "demo"].into_iter().map(str::to_owned).collect()),
+        ]);
+    }
+
+    #[test]
+    fn rejected_service_states_never_run_daemon_operation() {
+        for active in ["inactive", "failed", "unknown"] {
+            let state = State {
+                service_load: "loaded",
+                service_active: active,
+                socket_load: "loaded",
+                socket_active: "active",
+            };
+            let mut calls = vec![];
+            assert!(status_with(&mut runner(state, &mut calls)).is_err());
+            assert_no_daemon(&calls);
+        }
+    }
+
+    #[test]
+    fn uncertain_socket_states_never_run_daemon_operation() {
+        for (load, active) in [
+            ("loaded", "failed"),
+            ("loaded", "unknown"),
+            ("masked", "inactive"),
+            ("error", "active"),
+        ] {
+            let state = State {
+                service_load: "loaded",
+                service_active: "active",
+                socket_load: load,
+                socket_active: active,
+            };
+            let mut calls = vec![];
+            assert!(list_with(&mut runner(state, &mut calls)).is_err());
+            assert_no_daemon(&calls);
+        }
+    }
+
+    #[test]
+    fn loaded_inactive_and_not_found_socket_preserve_inspect_behavior() {
+        for (load, active) in [("loaded", "inactive"), ("not-found", "inactive")] {
+            let state = State {
+                service_load: "loaded",
+                service_active: "active",
+                socket_load: load,
+                socket_active: active,
+            };
+            let mut calls = vec![];
+            assert_eq!(
+                inspect_with(&mut runner(state, &mut calls), "demo")
+                    .unwrap()
+                    .name,
+                "demo"
+            );
+            assert!(calls
+                .iter()
+                .any(|(program, args)| program == "docker" && args.contains(&"inspect".into())));
+        }
+    }
+
+    #[test]
+    fn invalid_inspect_name_precedes_every_subprocess() {
+        let state = State {
+            service_load: "loaded",
+            service_active: "active",
+            socket_load: "loaded",
+            socket_active: "active",
+        };
+        let mut calls = vec![];
+        assert_eq!(
+            inspect_with(&mut runner(state, &mut calls), "../demo"),
+            Err("nombre de contenedor inválido".into())
+        );
+        assert!(calls.is_empty());
+    }
 
     #[test]
     fn parses_only_selected_container_fields() {
@@ -178,7 +362,7 @@ mod tests {
                 name: "demo".into(),
                 id: "1234567890ab".into(),
                 image: "image:1".into(),
-                state: "exited".into(),
+                state: "exited".into()
             }
         );
         assert_eq!(parse_containers("").unwrap(), vec![]);
