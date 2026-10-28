@@ -21,10 +21,49 @@ pub struct Project {
     pub head: Option<String>,
 }
 
-/// Acepta únicamente un montaje ext4 inequívoco en /srv, sin montajes descendientes.
-/// No demuestra identidad física; el estado puede cambiar después de esta lectura.
+/// Evidencia pasiva; no demuestra identidad física ni evita cambios posteriores.
 pub fn compatible_mountinfo(raw: &str) -> bool {
-    let mut found = 0;
+    compatible_for(raw, Path::new("/srv/workspaces"), None)
+}
+
+fn mount_path(s: &str) -> Option<PathBuf> {
+    use std::os::unix::ffi::OsStringExt;
+    let bytes = s.as_bytes();
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'\\' {
+            let code = bytes.get(i + 1..i + 4)?;
+            out.push(match code {
+                b"040" => b' ',
+                b"011" => b'\t',
+                b"012" => b'\n',
+                b"134" => b'\\',
+                _ => return None,
+            });
+            i += 4;
+        } else {
+            out.push(bytes[i]);
+            i += 1;
+        }
+    }
+    let path = PathBuf::from(std::ffi::OsString::from_vec(out));
+    if !path.is_absolute()
+        || path
+            .as_os_str()
+            .as_encoded_bytes()
+            .split(|b| *b == b'/')
+            .any(|p| p == b"." || p == b"..")
+    {
+        return None;
+    }
+    Some(path)
+}
+
+fn compatible_for(raw: &str, workspace: &Path, name: Option<&str>) -> bool {
+    let target = name.map_or_else(|| workspace.to_path_buf(), |n| workspace.join(n));
+    let mut ids = std::collections::HashSet::new();
+    let mut srv = Vec::new();
     for line in raw.lines() {
         let Some((left, right)) = line.split_once(" - ") else {
             return false;
@@ -34,26 +73,46 @@ pub fn compatible_mountinfo(raw: &str) -> bool {
         if fields.len() < 6 || after.len() < 3 {
             return false;
         }
-        // No interpretar rutas escapadas: podrían ocultar un montaje relevante.
-        if fields[4].contains('\\') {
+        let (Ok(id), Ok(parent)) = (fields[0].parse::<u64>(), fields[1].parse::<u64>()) else {
+            return false;
+        };
+        if id == 0 || parent == 0 || !ids.insert(id) {
             return false;
         }
-        if fields[4] == "/srv" {
-            found += 1;
-            if fields[3] != "/"
-                || after[0] != "ext4"
-                || after[1] == "none"
-                || !fields[2].split_once(':').is_some_and(|(a, b)| {
-                    a.parse::<u32>().is_ok() && b.parse::<u32>().is_ok() && a != "0"
-                })
-            {
-                return false;
-            }
-        } else if fields[4].starts_with("/srv/") {
+        let Some(path) = mount_path(fields[4]) else {
+            return false;
+        };
+        if mount_path(fields[3]).is_none() {
+            return false;
+        }
+        if path == Path::new("/srv") {
+            srv.push((id, parent, fields[3], fields[2], after[0], after[1]));
+        } else if path.starts_with("/srv")
+            && (target.starts_with(&path) || path.starts_with(&target))
+        {
             return false;
         }
     }
-    found == 1
+    let valid_ext = |entry: &(u64, u64, &str, &str, &str, &str)| {
+        entry.2 == "/"
+            && entry.4 == "ext4"
+            && entry.5 != "none"
+            && entry.3.split_once(':').is_some_and(|(a, b)| {
+                a.parse::<u32>().is_ok_and(|n| n != 0) && b.parse::<u32>().is_ok()
+            })
+    };
+    match srv.as_slice() {
+        [ext] => valid_ext(ext),
+        [a, b] => {
+            let (auto, ext) = if a.4 == "autofs" { (a, b) } else { (b, a) };
+            auto.4 == "autofs"
+                && auto.2 == "/"
+                && auto.1 != ext.0
+                && ext.1 == auto.0
+                && valid_ext(ext)
+        }
+        _ => false,
+    }
 }
 
 fn name_ok(name: &str) -> bool {
@@ -221,10 +280,10 @@ impl Projects {
         }
         Ok(Self { workspace })
     }
-    fn open(&self) -> Result<File, String> {
+    fn open(&self, name: Option<&str>) -> Result<File, String> {
         let mounts = fs::read_to_string("/proc/self/mountinfo")
             .map_err(|_| "workspaces: unknown (mountinfo no disponible)".to_owned())?;
-        if !compatible_mountinfo(&mounts) {
+        if !compatible_for(&mounts, &self.workspace, name) {
             return Err("workspaces: unknown (montaje /srv no confirmado)".into());
         }
         let mut dir = OpenOptions::new()
@@ -243,7 +302,7 @@ impl Projects {
         Ok(dir)
     }
     pub fn list(&self) -> Result<Vec<Project>, String> {
-        let dir = self.open()?;
+        let dir = self.open(None)?;
         let path = format!("/proc/self/fd/{}", std::os::fd::AsRawFd::as_raw_fd(&dir));
         let entries =
             fs::read_dir(path).map_err(|_| "workspaces: unknown (lectura fallida)".to_owned())?;
@@ -265,7 +324,7 @@ impl Projects {
         if !name_ok(name) {
             return Err("nombre de proyecto inválido".into());
         }
-        let dir = self.open()?;
+        let dir = self.open(Some(name))?;
         Ok(project(&dir, name))
     }
 }
@@ -285,6 +344,44 @@ mod tests {
         assert!(!compatible_mountinfo(&format!(
             "{good}43 42 0:9 / /srv/workspaces rw - autofs none rw\n"
         )));
+    }
+    #[test]
+    fn mount_stack_and_query_scope() {
+        let stack =
+            "10 1 0:5 / /srv rw - autofs systemd-1 rw\n11 10 8:1 / /srv rw - ext4 /dev/sda1 rw\n";
+        let ws = Path::new("/srv/workspaces");
+        assert!(compatible_for(stack, ws, None));
+        assert!(compatible_for(
+            &format!("{stack}12 11 8:2 / /srv/docker rw - ext4 /dev/sdb rw\n"),
+            ws,
+            None
+        ));
+        assert!(!compatible_for(&stack.replace("11 10", "11 1"), ws, None));
+        assert!(!compatible_for(
+            &format!("{stack}12 11 8:2 / /srv/workspaces/a/.git rw - ext4 /dev/sdb rw\n"),
+            ws,
+            Some("a")
+        ));
+        assert!(compatible_for(
+            &format!("{stack}12 11 8:2 / /srv/workspaces/b rw - ext4 /dev/sdb rw\n"),
+            ws,
+            Some("a")
+        ));
+        assert!(!compatible_for(
+            &format!("{stack}12 11 8:2 / /srv/workspaces/b rw - ext4 /dev/sdb rw\n"),
+            ws,
+            None
+        ));
+        assert!(!compatible_for(
+            &format!("{stack}12 11 8:2 / /srv/workspaces/a\\057.git rw - ext4 /dev/sdb rw\n"),
+            ws,
+            Some("a")
+        ));
+        assert!(!compatible_for(
+            &format!("{stack}12 11 8:2 / /srv/workspaces/a\\999 rw - ext4 /dev/sdb rw\n"),
+            ws,
+            Some("a")
+        ));
     }
     #[test]
     fn reads_only_direct_metadata_without_following_links() {
