@@ -4,9 +4,6 @@ use std::io::{self, Read};
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Component, Path, PathBuf};
 
-const NOFOLLOW: i32 = 0x20000;
-const DIRECTORY: i32 = 0x10000;
-const NONBLOCK: i32 = 0x800;
 const LIMIT: u64 = 1024 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -93,7 +90,9 @@ fn open_child(parent: &File, name: &str, directory: bool) -> io::Result<File> {
     );
     OpenOptions::new()
         .read(true)
-        .custom_flags(NOFOLLOW | NONBLOCK | if directory { DIRECTORY } else { 0 })
+        .custom_flags(
+            libc::O_NOFOLLOW | libc::O_NONBLOCK | if directory { libc::O_DIRECTORY } else { 0 },
+        )
         .open(path)
 }
 
@@ -230,7 +229,7 @@ impl Projects {
         }
         let mut dir = OpenOptions::new()
             .read(true)
-            .custom_flags(NOFOLLOW | DIRECTORY)
+            .custom_flags(libc::O_NOFOLLOW | libc::O_DIRECTORY)
             .open("/")
             .map_err(|_| "workspaces: unknown".to_owned())?;
         for part in self.workspace.components().skip(1) {
