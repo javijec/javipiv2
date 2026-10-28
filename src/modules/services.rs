@@ -82,6 +82,70 @@ impl PlanAllowlist {
     }
 }
 
+/// Política de ejecución independiente de la autorización para planificar.
+/// No existe mecanismo de activación ni unidades administradas en esta etapa.
+#[derive(Debug, Default)]
+pub struct ExecutionPolicy;
+
+impl ExecutionPolicy {
+    pub fn authorize(&self, _plan: &ServicePlan) -> Result<(), &'static str> {
+        Err("ejecución de servicios deshabilitada")
+    }
+}
+
+/// Prepara argumentos separados, sin invocar systemctl ni autorizar la operación.
+pub fn execution_arguments(plan: &ServicePlan) -> Result<[String; 4], &'static str> {
+    if !valid_plan_unit(&plan.unit) {
+        return Err("nombre de servicio inválido");
+    }
+    Ok([
+        "--system".into(),
+        plan.operation.as_str().into(),
+        "--".into(),
+        plan.unit.clone(),
+    ])
+}
+
+/// Un código de salida no acredita que el servicio alcanzó el estado deseado.
+#[derive(Debug, PartialEq, Eq)]
+pub enum ExecutionResult {
+    CommandExitedSuccessfullyUnverified,
+    CommandFailed,
+}
+
+fn run_prepared(
+    args: &[String; 4],
+    runner: &mut impl FnMut(&[String; 4]) -> Result<bool, String>,
+) -> Result<ExecutionResult, String> {
+    Ok(if runner(args)? {
+        ExecutionResult::CommandExitedSuccessfullyUnverified
+    } else {
+        ExecutionResult::CommandFailed
+    })
+}
+
+/// El ejecutor inyectado no se invoca mientras la política deniegue la acción.
+pub fn execute_service(
+    plan: &ServicePlan,
+    runner: &mut impl FnMut(&[String; 4]) -> Result<bool, String>,
+) -> Result<ExecutionResult, String> {
+    ExecutionPolicy.authorize(plan).map_err(str::to_owned)?;
+    let args = execution_arguments(plan).map_err(str::to_owned)?;
+    run_prepared(&args, runner)
+}
+
+/// La política actual rechaza todos los planes antes de arrancar systemctl.
+pub fn execute_service_systemctl(plan: &ServicePlan) -> Result<ExecutionResult, String> {
+    execute_service(plan, &mut |args| {
+        Command::new("/usr/bin/systemctl")
+            .env_clear()
+            .args(args)
+            .status()
+            .map(|status| status.success())
+            .map_err(|error| format!("no se pudo iniciar systemctl: {error}"))
+    })
+}
+
 /// Descripción en memoria; no tiene ninguna capacidad de ejecución.
 #[derive(Debug, PartialEq, Eq)]
 pub struct ServicePlan {
@@ -277,6 +341,73 @@ mod tests {
                 &format!("{}.service", "a".repeat(248))
             )
             .is_err());
+    }
+
+    #[test]
+    fn disabled_execution_never_invokes_injected_runner() {
+        let plan = PlanAllowlist::new(["demo.service".to_owned()])
+            .unwrap()
+            .plan(ServiceOperation::Restart, "demo.service")
+            .unwrap();
+        let mut calls = 0;
+        let mut fake = |_: &[String; 4]| {
+            calls += 1;
+            Ok(false)
+        };
+        assert!(execute_service(&plan, &mut fake).is_err());
+        assert_eq!(calls, 0);
+        assert_eq!(
+            execute_service_systemctl(&plan),
+            Err("ejecución de servicios deshabilitada".into())
+        );
+    }
+
+    #[test]
+    fn simulated_runner_result_is_not_a_verified_service_outcome() {
+        let args = execution_arguments(&ServicePlan {
+            operation: ServiceOperation::Stop,
+            unit: "demo.service".into(),
+        })
+        .unwrap();
+        let mut fake = |seen: &[String; 4]| {
+            assert_eq!(seen[1], "stop");
+            Ok(true)
+        };
+        assert_eq!(
+            run_prepared(&args, &mut fake).unwrap(),
+            ExecutionResult::CommandExitedSuccessfullyUnverified
+        );
+        let mut fail = |_: &[String; 4]| Ok(false);
+        assert_eq!(
+            run_prepared(&args, &mut fail).unwrap(),
+            ExecutionResult::CommandFailed
+        );
+    }
+
+    #[test]
+    fn execution_is_denied_independently_of_planning_and_arguments_are_separate() {
+        let allowed = PlanAllowlist::new(["demo.service".to_owned()]).unwrap();
+        for operation in [
+            ServiceOperation::Start,
+            ServiceOperation::Stop,
+            ServiceOperation::Restart,
+        ] {
+            let plan = allowed.plan(operation, "demo.service").unwrap();
+            assert_eq!(
+                ExecutionPolicy.authorize(&plan),
+                Err("ejecución de servicios deshabilitada")
+            );
+            assert_eq!(
+                execution_arguments(&plan).unwrap(),
+                ["--system", operation.as_str(), "--", "demo.service"]
+            );
+        }
+        let forged = ServicePlan {
+            operation: ServiceOperation::Start,
+            unit: "--bad.service".into(),
+        };
+        assert!(ExecutionPolicy.authorize(&forged).is_err());
+        assert!(execution_arguments(&forged).is_err());
     }
 
     #[test]
