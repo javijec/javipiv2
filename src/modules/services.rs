@@ -236,10 +236,14 @@ pub fn parse_status(raw: &str) -> Result<Service, String> {
     })
 }
 
+fn query_command(args: &[&str]) -> Command {
+    let mut command = Command::new("/usr/bin/systemctl");
+    command.env("LC_ALL", "C").args(args);
+    command
+}
+
 fn query(args: &[&str]) -> Result<String, String> {
-    let output = Command::new("systemctl")
-        .env("LC_ALL", "C")
-        .args(args)
+    let output = query_command(args)
         .output()
         .map_err(|error| format!("no se pudo consultar systemd: {error}"))?;
     if !output.status.success() {
@@ -291,6 +295,22 @@ pub fn status(name: &str) -> Result<Service, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn service_queries_use_absolute_systemctl_with_separate_arguments() {
+        let command = query_command(&["--system", "show", "--", "demo.service"]);
+        assert_eq!(command.get_program(), "/usr/bin/systemctl");
+        assert_eq!(
+            command.get_args().collect::<Vec<_>>(),
+            ["--system", "show", "--", "demo.service"]
+        );
+        let list = query_command(&["--system", "--all", "list-units"]);
+        assert_eq!(list.get_program(), "/usr/bin/systemctl");
+        assert_eq!(
+            list.get_args().collect::<Vec<_>>(),
+            ["--system", "--all", "list-units"]
+        );
+    }
 
     #[test]
     fn plans_only_exact_allowed_units_and_known_operations() {
