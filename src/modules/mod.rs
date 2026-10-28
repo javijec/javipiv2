@@ -1,3 +1,4 @@
+pub mod backups;
 pub mod docker;
 pub mod health;
 pub mod preflight;

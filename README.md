@@ -41,6 +41,23 @@ F3-B prepara un ejecutor con argumentos separados y una política independiente 
 
 `project list` y `project status <nombre>` consultan carpetas directas de `/srv/workspaces`; `JAVIPIV2_WORKSPACES` permite configurar otra ruta absoluta bajo `/srv`. Antes de abrirla se exige evidencia pasiva en `/proc/self/mountinfo` de ext4 con raíz `/` en `/srv`, solo o directamente sobre una capa autofs. Se rechazan montajes que afecten la ruta consultada: para `list`, todo el árbol de workspaces; para `status`, sus antecesores y el árbol del proyecto elegido. Montajes ajenos como `/srv/docker` no bloquean la consulta. Si falta evidencia se informa `unknown` y no se recorre `/srv`. No demuestra la identidad física del disco ni garantiza excluir bind mounts; la comprobación tiene una ventana de carrera frente a cambios de montaje. Las operaciones futuras con efectos requieren comprobar identidad. No se consulta capacidad. Se leen directamente metadatos Git sin ejecutar Git ni shell, sin seguir enlaces; worktrees con archivo `.git`, metadatos inaccesibles y formatos no reconocidos quedan desconocidos. La categoría `compatible (validez no verificada)` solo indica metadatos con forma reconocible: no verifica objetos, integridad ni validez real del repositorio. Una referencia suelta inaccesible o inválida no se sustituye por un valor posiblemente obsoleto de `packed-refs`. Los nombres de carpetas no UTF-8 provocan un error `unknown` en lugar de omitirlas. No se consultan cambios, remotos ni sincronización. Las pruebas sintéticas de F2-D pasaron; su funcionamiento con proyectos reales sigue pendiente de validación.
 
+## Snapshots suministrados por stdin
+
+`javipiv2 backup inspect --stdin` interpreta un array JSON de `restic snapshots --json` suministrado explícitamente (máximo 4 MiB). No ejecuta Restic ni abre rutas o configuración. Reconoce tags `profile:full`, `profile:projects` y `profile:engram`; fechas ausentes o inválidas hacen desconocido el último snapshot. El último intento y su resultado no se pueden deducir del listado.
+
+Ejemplo sintético:
+
+```text
+Entrada: [{"time":"2024-01-01T00:00:00Z","id":"abcdef012345","tags":["profile:full"]}]
+Salida:
+Snapshots: 1
+Fecha: 2024-01-01T00:00:00Z
+ID: abcdef01
+Perfil: full
+Último intento: desconocido
+Resultado del último intento: desconocido
+```
+
 ## TUI inicial (pendiente de validación)
 
 `javipiv2 tui` presenta Health, Services, Docker y Projects usando los módulos existentes. En el menú, flechas seleccionan y Enter abre una vista; Tab alterna el foco entre menú y listado. En el listado, flechas seleccionan una fila y Enter abre detalles; Esc regresa al listado, después al menú y finalmente sale. Q sale en cualquier contexto. R solicita una consulta; seleccionar o abrir detalles no consulta. `j`/`k` desplazan verticalmente y `h`/`l` horizontalmente. Los detalles reutilizan la última consulta completada: Services muestra carga, actividad, subestado y categoría; Docker, identificador, imagen y estado; Projects, evidencia Git, rama y HEAD. Health se consulta al abrir; Docker y Projects requieren abrir su vista y pulsar R. No hay controles administrativos ni polling continuo. No acceder a proyectos productivos durante el desarrollo.

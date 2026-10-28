@@ -2,8 +2,9 @@
 
 use crate::core::catalog::{all_modules, profile_modules};
 use crate::core::minimal_simulation::MinimalSimulation;
-use crate::modules::{docker, health, preflight, projects, services};
+use crate::modules::{backups, docker, health, preflight, projects, services};
 use std::ffi::OsString;
+use std::io::Read;
 
 fn help() {
     println!(
@@ -20,6 +21,7 @@ fn help() {
     println!("  service status <nombre>  Estado de un servicio (solo lectura)");
     println!("  service plan <start|stop|restart> <unidad.service> --allow <unidad.service>");
     println!("                         Solo plan; --allow autoriza esa unidad para esta consulta");
+    println!("  backup inspect --stdin  Observar snapshots JSON suministrados por stdin");
     println!("  docker status          Consultar daemon Docker local");
     println!("  docker list            Listar contenedores locales");
     println!("  docker inspect <nombre>  Información básica de un contenedor");
@@ -113,6 +115,32 @@ pub fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), String> {
                 }
                 None => println!("Temperatura CPU: desconocida"),
             }
+        }
+        ["backup", "inspect", "--stdin"] => {
+            const MAX_INPUT: usize = 4 * 1024 * 1024;
+            let mut input = Vec::new();
+            std::io::stdin()
+                .lock()
+                .take((MAX_INPUT + 1) as u64)
+                .read_to_end(&mut input)
+                .map_err(|_| "no se pudo leer stdin")?;
+            if input.len() > MAX_INPUT {
+                return Err("entrada de snapshots demasiado grande".into());
+            }
+            let observation = backups::inspect(&input)?;
+            println!("Snapshots: {}", observation.count);
+            if let Some(snapshot) = observation.newest {
+                println!("Fecha: {}", snapshot.time);
+                println!("ID: {}", snapshot.id.as_deref().unwrap_or("desconocido"));
+                println!(
+                    "Perfil: {}",
+                    snapshot.profile.as_deref().unwrap_or("desconocido")
+                );
+            } else {
+                println!("Último snapshot: desconocido");
+            }
+            println!("Último intento: desconocido");
+            println!("Resultado del último intento: desconocido");
         }
         ["docker", "status"] => {
             docker::status()?;
