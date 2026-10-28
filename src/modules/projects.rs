@@ -82,9 +82,8 @@ fn compatible_for(raw: &str, workspace: &Path, name: Option<&str>) -> bool {
         let Some(path) = mount_path(fields[4]) else {
             return false;
         };
-        if mount_path(fields[3]).is_none() {
-            return false;
-        }
+        // Las raíces de otros sistemas, como nsfs, no son necesariamente rutas.
+        // La raíz de la pila /srv se valida más abajo antes de aceptarla.
         if path == Path::new("/srv") {
             srv.push((id, parent, fields[3], fields[2], after[0], after[1]));
         } else if path.starts_with("/srv")
@@ -381,6 +380,23 @@ mod tests {
             &format!("{stack}12 11 8:2 / /srv/workspaces/a\\999 rw - ext4 /dev/sdb rw\n"),
             ws,
             Some("a")
+        ));
+    }
+    #[test]
+    fn accepts_unrelated_namespace_mounts_with_active_srv_stack() {
+        let mounts = concat!(
+            "56 20 0:29 / /srv rw,relatime shared:17 - autofs systemd-1 rw\n",
+            "37 56 8:1 / /srv rw,noatime shared:36 - ext4 /dev/sda1 rw\n",
+            "103 37 0:44 / /srv/docker/rootfs/overlayfs/a rw - overlay overlay rw\n",
+            "104 37 0:45 / /srv/docker/rootfs/overlayfs/b rw - overlay overlay rw\n",
+            "252 37 0:46 / /srv/docker/rootfs/overlayfs/c rw - overlay overlay rw\n",
+            "337 37 0:47 / /srv/docker/rootfs/overlayfs/d rw - overlay overlay rw\n",
+            "476 27 0:4 net:[4026532528] /run/docker/netns/a rw shared:314 - nsfs nsfs rw\n",
+        );
+        assert!(compatible_for(
+            mounts,
+            Path::new("/srv/workspaces"),
+            Some("JaviPiV2")
         ));
     }
     #[test]
