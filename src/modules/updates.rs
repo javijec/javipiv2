@@ -73,7 +73,7 @@ impl Observation {
     }
 }
 
-// Only fixed paths beneath /usr are inspected. Reject symlinks at every component.
+// Only fixed package paths are inspected. Reject symlinks at every component.
 fn local_file(path: &str) -> Option<Vec<u8>> {
     use std::os::fd::{AsRawFd, FromRawFd};
     let mut dir = std::fs::File::open("/").ok()?;
@@ -215,12 +215,33 @@ pub fn check_with(
         .into_iter()
         .map(|(name, package, url, field)| {
             let installed = package.and_then(|p| {
-                ["/usr/local/lib/node_modules", "/usr/lib/node_modules"]
-                    .iter()
-                    .find_map(|prefix| {
-                        local(&format!("{prefix}/{p}/package.json"))
-                            .and_then(|bytes| json_version(&bytes, "version"))
-                    })
+                let mut found: Option<String> = None;
+                let mut ambiguous = false;
+                for prefix in [
+                    "/usr/local/lib/node_modules",
+                    "/usr/lib/node_modules",
+                    "/home/dietpi/.pi/agent/npm/node_modules",
+                    "/home/dietpi/.npm-global/lib/node_modules",
+                ] {
+                    if let Some(bytes) = local(&format!("{prefix}/{p}/package.json")) {
+                        match json_version(&bytes, "version") {
+                            Some(version) => {
+                                if found.as_ref().is_some_and(|previous| {
+                                    compare(Some(previous), Some(&version)) != Comparison::Current
+                                }) {
+                                    ambiguous = true;
+                                }
+                                found = Some(version);
+                            }
+                            None => ambiguous = true,
+                        }
+                    }
+                }
+                if ambiguous {
+                    None
+                } else {
+                    found
+                }
             });
             let upstream = fetch(url).and_then(|bytes| json_version(&bytes, field));
             let comparison = compare(installed.as_deref(), upstream.as_deref());

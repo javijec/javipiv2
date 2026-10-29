@@ -63,15 +63,12 @@ fn updates_injected_sources_cover_all_endpoints_and_no_execution() {
             "https://api.github.com/repos/Gentleman-Programming/engram/releases/latest"
         ]
     );
-    assert_eq!(
-        paths,
-        [
-            "/usr/local/lib/node_modules/@openai/codex/package.json",
-            "/usr/local/lib/node_modules/@earendil-works/pi-coding-agent/package.json",
-            "/usr/local/lib/node_modules/gentle-pi/package.json",
-            "/usr/local/lib/node_modules/@getpaseo/cli/package.json"
-        ]
-    );
+    assert_eq!(paths.len(), 16);
+    assert!(paths
+        .contains(&"/home/dietpi/.pi/agent/npm/node_modules/gentle-pi/package.json".to_owned()));
+    assert!(paths.contains(
+        &"/home/dietpi/.npm-global/lib/node_modules/@openai/codex/package.json".to_owned()
+    ));
     assert!(results[..4]
         .iter()
         .all(|r| r.comparison == Comparison::Available));
@@ -99,11 +96,34 @@ fn updates_local_fallback_and_failures_are_unknown() {
         },
         |_| None,
     );
-    assert_eq!(paths.len(), 8);
+    assert_eq!(paths.len(), 16);
     assert_eq!(results[2].installed.as_deref(), Some("3.0.0"));
     assert!(results
         .iter()
         .all(|r| r.comparison == Comparison::Unknown && r.upstream.is_none()));
+}
+
+#[test]
+fn updates_conflicting_installed_candidates_are_unknown() {
+    let results = check_with(
+        |path| {
+            if path == "/usr/lib/node_modules/@openai/codex/package.json" {
+                Some(br#"{"version":"2.0.0"}"#.to_vec())
+            } else if path == "/home/dietpi/.npm-global/lib/node_modules/@openai/codex/package.json"
+            {
+                Some(br#"{"version":"1.0.0"}"#.to_vec())
+            } else {
+                None
+            }
+        },
+        |_| Some(br#"{"version":"3.0.0"}"#.to_vec()),
+    );
+    assert_eq!(results[0].installed, None);
+    assert_eq!(results[0].comparison, Comparison::Unknown);
+    assert_eq!(
+        results[0].line(),
+        "Codex: instalada=desconocido, upstream=3.0.0, estado=desconocido"
+    );
 }
 
 #[test]
