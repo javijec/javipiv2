@@ -556,7 +556,11 @@ mod tests {
     #[test]
     fn remote_manual_request_uses_worker() {
         fn fake(_: usize) -> Answer {
-            Ok(Data::Remote(remote::status_with(|_| Err("privado".into()))))
+            Ok(Data::Remote(remote::status_with_tcp(
+                |_| Err("privado".into()),
+                Err(()),
+                Err(()),
+            )))
         }
         let mut app = App::new();
         for _ in 0..7 {
@@ -578,6 +582,10 @@ mod tests {
             .text()
             .contains("SSH (ssh.service): carga=desconocido, actividad=desconocido"));
         assert!(app.text().contains("no demuestra conectividad"));
+        assert!(app
+            .text()
+            .contains("TCP en escucha (sin atribución): desconocido"));
+        assert!(app.text().contains("conectividad Tailscale=desconocido"));
         assert!(!app.text().contains("privado"));
         app.key(KeyCode::Tab);
         app.key(KeyCode::Enter);
