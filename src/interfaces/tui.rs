@@ -22,7 +22,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-const NAMES: [&str; 12] = [
+const NAMES: [&str; 13] = [
     "Health",
     "Services",
     "Docker",
@@ -35,6 +35,7 @@ const NAMES: [&str; 12] = [
     "Developer",
     "Overview",
     "Clean",
+    "Planning",
 ];
 const LIMIT: Duration = Duration::from_secs(10);
 
@@ -192,18 +193,18 @@ struct Worker {
 struct App {
     selected: usize,
     view: usize,
-    content: [String; 12],
-    data: [Option<Data>; 12],
-    status: [Option<String>; 12],
-    failed: [bool; 12],
-    last_error: [Option<String>; 12],
+    content: [String; 13],
+    data: [Option<Data>; 13],
+    status: [Option<String>; 13],
+    failed: [bool; 13],
+    last_error: [Option<String>; 13],
     worker: Option<Worker>,
     notice: Option<String>,
     row: usize,
     column: usize,
     list_row: usize,
     list_column: usize,
-    item: [usize; 12],
+    item: [usize; 13],
     table_focus: bool,
     detail: bool,
     height: usize,
@@ -218,7 +219,7 @@ impl App {
             }),
             data: std::array::from_fn(|_| None),
             status: std::array::from_fn(|_| None),
-            failed: [false; 12],
+            failed: [false; 13],
             last_error: std::array::from_fn(|_| None),
             worker: None,
             notice: None,
@@ -226,7 +227,7 @@ impl App {
             column: 0,
             list_row: 0,
             list_column: 0,
-            item: [0; 12],
+            item: [0; 13],
             table_focus: false,
             detail: false,
             height: 0,
@@ -235,7 +236,11 @@ impl App {
     fn text(&self) -> String {
         if self.view == 10 {
             let mut text = String::from("Solo resultados almacenados; disponible indica evidencia, no instalación ni salud. Remote no demuestra conectividad. R no consulta.\n");
-            for (i, name) in NAMES.iter().enumerate().filter(|(i, _)| *i != 10) {
+            for (i, name) in NAMES
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| *i != 10 && *i != 12)
+            {
                 let state = if self.failed[i] {
                     "error"
                 } else {
@@ -360,6 +365,13 @@ impl App {
         if self.view == 10 {
             return;
         }
+        if self.view == 12 {
+            match crate::core::install_plan::simulate_profile("minimal") {
+                Ok(text) => self.content[12] = text,
+                Err(_) => self.content[12] = "Error al preparar plan simulado".into(),
+            }
+            return;
+        }
         if self.worker.is_some() {
             self.notice = Some("Hay una consulta en curso; esperá a que termine".into());
             return;
@@ -451,7 +463,9 @@ impl App {
             }
             KeyCode::Esc if self.table_focus => self.table_focus = false,
             KeyCode::Esc => return false,
-            KeyCode::Tab if !self.detail && self.view != 0 && self.view != 10 => {
+            KeyCode::Tab
+                if !self.detail && self.view != 0 && self.view != 10 && self.view != 12 =>
+            {
                 self.table_focus = !self.table_focus;
                 if self.table_focus {
                     self.keep_visible();
@@ -649,6 +663,25 @@ pub fn run() -> Result<(), String> {
 mod tests {
     use super::*;
     #[test]
+    fn planning_is_manual_and_never_queries_host() {
+        fn forbidden(_: usize) -> Answer {
+            panic!("Planning must not query host")
+        }
+        let mut app = App::new();
+        app.key_with(KeyCode::Up, forbidden);
+        assert_eq!(NAMES[app.selected], "Planning");
+        app.key_with(KeyCode::Enter, forbidden);
+        assert!(app.worker.is_none());
+        assert!(app.text().contains("Sin consultar"));
+        app.key_with(KeyCode::Char('R'), forbidden);
+        assert!(app.worker.is_none());
+        assert!(app.text().contains("Plan simulado: minimal"));
+        assert!(app.text().contains("dependencias no verificadas"));
+        assert!(app.text().contains("instalación indefinida y bloqueada"));
+        app.key_with(KeyCode::Down, forbidden);
+        assert_eq!(app.selected, 0);
+    }
+    #[test]
     fn clean_view_requires_manual_request() {
         fn fake(view: usize) -> Answer {
             assert_eq!(view, 11);
@@ -704,11 +737,14 @@ mod tests {
             app.selected = 0;
             check(&mut terminal, &app, "> Health");
             app.key(KeyCode::Up);
+            check(&mut terminal, &app, "> Planning");
+            app.key(KeyCode::Up);
             check(&mut terminal, &app, "> Clean");
             app.key(KeyCode::Up);
             check(&mut terminal, &app, "> Overview");
             app.key(KeyCode::Up);
             check(&mut terminal, &app, "> Developer");
+            app.key(KeyCode::Down);
             app.key(KeyCode::Down);
             app.key(KeyCode::Down);
             app.key(KeyCode::Down);
@@ -1010,6 +1046,9 @@ mod tests {
         app.key(KeyCode::Down);
         app.key(KeyCode::Enter);
         assert_eq!(app.view, 11);
+        app.key(KeyCode::Down);
+        app.key(KeyCode::Enter);
+        assert_eq!(app.view, 12);
         app.key(KeyCode::Down);
         app.key(KeyCode::Enter);
         assert_eq!(app.view, 0);

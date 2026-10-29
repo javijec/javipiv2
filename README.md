@@ -17,6 +17,7 @@ cargo run --locked -- developer compare 1.2.3 1.3.0
 cargo run --locked -- developer status
 cargo run --locked -- agents status
 cargo run --locked -- remote status
+cargo run --locked -- service managed
 cargo run --locked -- service list
 cargo run --locked -- service status ssh
 cargo run --locked -- docker status
@@ -25,6 +26,7 @@ cargo run --locked -- docker inspect ejemplo
 cargo run --locked -- module list
 cargo run --locked -- plan minimal
 cargo run --locked -- preflight minimal
+cargo run --locked -- simulate plan minimal
 cargo run --locked -- simulate minimal
 cargo test --locked
 ```
@@ -41,7 +43,7 @@ La biblioteca también ofrece `core::minimal_simulation::MinimalSimulation`: `ne
 
 `service plan <start|stop|restart> <unidad.service> --allow <unidad.service>` describe una operación y unidad exactas, sin ejecutarlas ni consultar systemd. Ejemplo: `javipiv2 service plan restart ejemplo.service --allow ejemplo.service`. Sin `--allow` se rechaza el plan; la CLI autoriza una sola unidad por consulta y la biblioteca admite una lista configurable, vacía por defecto. Esta autorización solo permite crear planes, no concede permisos de ejecución ni acredita que la unidad exista o pertenezca a JaviPi. Un `ServicePlan` es una descripción, no una prueba de autorización; cualquier ejecución futura deberá validar y autorizar de nuevo. Se aceptan nombres ASCII conservadores con sufijo `.service` e instancias no vacías, sin escapes ni rutas. F3-A y sus pruebas están pendientes de compilación y validación; no hay controles administrativos en la TUI ni ejecución implementada.
 
-La API `modules::managed_units::ManagedUnitRegistry` ofrece una vista inmutable, en orden de declaración, para futuros diagnósticos CLI/TUI. Está vacía porque no se ha acreditado ninguna unidad propia de JaviPiV2; solo admite declaraciones tipadas privadas del código, con procedencia `JaviPiV2 declarative`. No consulta systemd, persiste datos ni prueba instalación o propiedad real en el host. Tampoco autoriza planes ni acciones: las políticas de F3 permanecen independientes.
+`service managed` muestra las declaraciones del registro sin consultar el host. La API `modules::managed_units::ManagedUnitRegistry` ofrece una vista inmutable, en orden de declaración, para diagnósticos. Está vacía porque no se ha acreditado ninguna unidad propia de JaviPiV2; solo admite declaraciones tipadas privadas del código, con procedencia `JaviPiV2 declarative`. No consulta systemd, persiste datos ni prueba instalación o propiedad real en el host. Tampoco autoriza planes ni acciones: las políticas de F3 permanecen independientes.
 
 F3-B prepara un ejecutor con argumentos separados y una política independiente que rechaza todos los planes, incluidos los autorizados con `--allow`, antes de invocar systemctl o un ejecutor inyectado. No existe activación real ni registro de operaciones reales. Un código de salida exitoso no demuestra el estado del servicio; antes de habilitar acciones harán falta unidades administradas explícitas, autorización expresa y comprobación del resultado.
 
@@ -92,7 +94,7 @@ Resultado del último intento: desconocido
 
 ## TUI de observación
 
-`javipiv2 tui` presenta Health, Services, Docker, Projects, Storage, Updates, Agents, Remote, Watchdog, Developer, Overview y Clean usando los módulos existentes. En el menú, flechas seleccionan y Enter abre una vista; el menú se desplaza para mantener visible la selección cuando hay espacio para filas. Tab alterna el foco entre menú y listado. En el listado, flechas seleccionan una fila y Enter abre detalles; Esc regresa al listado, después al menú y finalmente sale. Q sale en cualquier contexto. R solicita una consulta; seleccionar o abrir detalles no consulta. `j`/`k` desplazan verticalmente y `h`/`l` horizontalmente. Los detalles reutilizan la última consulta completada: Services muestra carga, actividad, subestado y categoría; Docker, identificador, imagen y estado; Projects, evidencia Git, rama y HEAD. Health se consulta al abrir; Docker, Projects, Storage, Updates, Agents, Remote, Watchdog, Developer y Clean requieren abrir su vista y pulsar R; Overview solo muestra datos almacenados. Storage muestra la evidencia confirmada de autofs, el montaje ext4 y el conteo de overlays Docker; la información desconocida se presenta como `desconocido`. No hay controles administrativos ni polling continuo. No acceder a proyectos productivos durante el desarrollo.
+`javipiv2 tui` presenta Health, Services, Docker, Projects, Storage, Updates, Agents, Remote, Watchdog, Developer, Overview, Clean y Planning usando los módulos existentes. Planning prepara solo al pulsar R el plan simulado Minimal en memoria, con el mismo formato que la CLI; abrir o seleccionar la vista no consulta, y no se guarda checkpoint. En el menú, flechas seleccionan y Enter abre una vista; el menú se desplaza para mantener visible la selección cuando hay espacio para filas. Tab alterna el foco entre menú y listado. En el listado, flechas seleccionan una fila y Enter abre detalles; Esc regresa al listado, después al menú y finalmente sale. Q sale en cualquier contexto. R solicita una consulta; seleccionar o abrir detalles no consulta. `j`/`k` desplazan verticalmente y `h`/`l` horizontalmente. Los detalles reutilizan la última consulta completada: Services muestra carga, actividad, subestado y categoría; Docker, identificador, imagen y estado; Projects, evidencia Git, rama y HEAD. Health se consulta al abrir; Docker, Projects, Storage, Updates, Agents, Remote, Watchdog, Developer y Clean requieren abrir su vista y pulsar R; Overview solo muestra datos almacenados. Storage muestra la evidencia confirmada de autofs, el montaje ext4 y el conteo de overlays Docker; la información desconocida se presenta como `desconocido`. No hay controles administrativos ni polling continuo. No acceder a proyectos productivos durante el desarrollo.
 
 El operador confirmó la revisión manual satisfactoria de las vistas Watchdog, Developer y Overview.
 
@@ -117,6 +119,8 @@ bash installer/bootstrap.sh --plan developer
 El bootstrap **solo inspecciona y presenta perfiles**. No descarga ni instala paquetes, no escribe en `/etc`, no toca `/srv`, no prepara particiones y no usa `sudo`. La instalación automatizada está planificada para F1, no existe aún.
 
 Los perfiles están en `profiles/`, y el catálogo único de módulos está en `catalog/modules.tsv`. El mismo catálogo se compila en Rust para el CLI. `module list` y `plan` validan las referencias y la ausencia de ciclos en todo el catálogo, incluso fuera del perfil elegido. La biblioteca expone `core::catalog::parse_catalog` para validar datos declarativos suministrados por el llamador, sin leer archivos ni consultar el host; un inventario válido no acredita instalación. Las 21 áreas cubren las funcionalidades del proyecto original, pero casi todas siguen en estado `planned`.
+
+`simulate plan <minimal|developer|full>` muestra efectos simulados deterministas del sandbox en memoria: dependencias no verificadas e instalación indefinida y bloqueada. No consulta el host, abre archivos, usa red, ejecuta acciones ni guarda checkpoints; no autoriza instalaciones. Es independiente de `simulate minimal`, que conserva su preflight de solo lectura.
 
 La API pura `core::install_plan::plan_profile` genera para cada perfil un plan tipado reproducible: por módulo describe la verificación de dependencias declarativas y una acción de instalación indefinida y bloqueada. Su identidad es una codificación versionada de todo el contenido, no una autorización. El plan solo contiene datos: no ejecuta verificaciones, no consulta el host ni instala paquetes. `core::simulation_sandbox::Sandbox` acepta únicamente el plan canónico completo del perfil y registra en memoria cada paso: dependencias externas no verificadas e instalación indefinida bloqueada. Cada sandbox es independiente y reproducible; `checkpoint()` devuelve bytes JSON versionados de hasta 64 KiB y `from_checkpoint()` valida el plan completo y reconstruye los efectos mediante repetición determinista. No acepta rutas ni persiste datos; el almacenamiento y la durabilidad ante fallos quedan fuera de esta API. No consulta ni modifica el host ni declara módulos instalados. Las acciones reales requieren autorización y diseño separados.
 

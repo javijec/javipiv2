@@ -21,6 +21,7 @@ fn help() {
     );
     println!("  module list            Catálogo (no instalaciones reales)");
     println!("  service list           Servicios conocidos por systemd (solo lectura)");
+    println!("  service managed        Declaraciones locales, sin propiedad ni autorización");
     println!("  service status <nombre>  Estado de un servicio (solo lectura)");
     println!("  service plan <start|stop|restart> <unidad.service> --allow <unidad.service>");
     println!("                         Solo plan; --allow autoriza esa unidad para esta consulta");
@@ -43,6 +44,7 @@ fn help() {
         "  JAVIPIV2_WORKSPACES    Ruta configurable bajo /srv (predeterminada: /srv/workspaces)"
     );
     println!("  plan <perfil>          Módulos previstos: minimal, developer, full");
+    println!("  simulate plan <minimal|developer|full>  Plan simulado, dependencias no verificadas e instalación bloqueada");
     println!("  simulate minimal       Progreso simulado de solo lectura, sin instalar");
     println!("  simulate minimal --fixture  Simulación con evidencia de stdin");
     println!("  preflight minimal      Diagnóstico y dependencias de solo lectura");
@@ -279,6 +281,17 @@ pub fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), String> {
             }
         }
         ["project", "status", name] => print_project(&projects()?.status(name)?),
+        ["service", "managed"] => {
+            let units = crate::modules::managed_units::ManagedUnitRegistry.units();
+            if units.is_empty() {
+                println!("Declaraciones administradas: vacías. No prueban propiedad en el host ni autorizan acciones.");
+            } else {
+                println!("Declaraciones administradas: no prueban propiedad en el host ni autorizan acciones.");
+                for unit in units {
+                    println!("{}: {}", unit.name(), unit.provenance().as_str());
+                }
+            }
+        }
         ["service", "list"] => {
             println!("Servicios conocidos por systemd (no es una lista completa de unidades instaladas):");
             for service in services::list()? {
@@ -308,6 +321,9 @@ pub fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), String> {
                 );
             }
             println!("Nota: el catálogo no acredita instalación ni activación.");
+        }
+        ["simulate", "plan", profile] => {
+            print!("{}", crate::core::install_plan::simulate_profile(profile)?);
         }
         ["simulate", "minimal"] | ["simulate", "minimal", "--fixture"] => {
             preflight::run(parts.len() == 3)?;
