@@ -667,6 +667,18 @@ mod tests {
         }
         assert!(app.worker.is_none());
         assert!(app.text().contains("Raíz (/): desconocido"));
+        app.selected = 10;
+        app.key_with(KeyCode::Enter, fake);
+        assert!(app.text().contains("Clean: desconocido"));
+        app.data[11] = Some(Data::Clean(Some(storage::Capacity {
+            total_bytes: 100,
+            used_bytes: 60,
+            available_bytes: 30,
+            reserved_bytes: 10,
+        })));
+        assert!(app.text().contains("Clean: disponible"));
+        app.key_with(KeyCode::Char('R'), fake);
+        assert!(app.worker.is_none());
     }
     #[test]
     fn menu_selection_stays_visible_in_small_terminals() {
