@@ -4,3 +4,6 @@ pub mod installation_state;
 pub mod minimal_simulation;
 pub mod simulated_progress;
 pub mod simulation_sandbox;
+
+#[cfg(all(test, target_os = "linux"))]
+mod fixture_installer;
