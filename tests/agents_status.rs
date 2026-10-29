@@ -2,6 +2,24 @@ use agents::Probe;
 use javipiv2::modules::agents;
 
 #[test]
+fn pi_agent_prioritizes_authorized_real_path() {
+    let result = agents::status_with_probes(
+        |_| None,
+        |path| {
+            if path == "/home/dietpi/.pi/agent/bin/pi" {
+                Probe::Executable
+            } else {
+                Probe::Absent
+            }
+        },
+    );
+    assert_eq!(
+        result[0].executable.as_deref(),
+        Some("/home/dietpi/.pi/agent/bin/pi")
+    );
+}
+
+#[test]
 fn executable_evidence_is_fixed_conservative_and_independent_of_version() {
     let mut paths = Vec::new();
     let result = agents::status_with_probes(
@@ -15,12 +33,30 @@ fn executable_evidence_is_fixed_conservative_and_independent_of_version() {
             }
         },
     );
-    assert_eq!(paths.len(), 12);
-    assert_eq!(result[0].line(), "Pi Agent: ejecutable=/usr/bin/pi (archivo regular con bits de ejecución; acceso no garantizado), versión npm=1.2.3 (no vinculada al ejecutable), estado=desconocido");
+    assert_eq!(paths.len(), 14);
+    assert_eq!(result[0].line(), "Pi Agent: ejecutable=/usr/bin/pi (ruta consultada; destino regular con bits de ejecución; acceso no garantizado), versión npm=1.2.3 (no vinculada al ejecutable), estado=desconocido");
     assert!(result[3]
         .line()
         .contains("ejecutable=/usr/local/bin/engram"));
     assert!(result[3].line().contains("versión npm=desconocido"));
+}
+
+#[test]
+fn no_agent_probe_targets_srv_and_uncertain_preferred_path_stays_unknown() {
+    let mut paths = Vec::new();
+    let result = agents::status_with_probes(
+        |_| None,
+        |path| {
+            paths.push(path.to_owned());
+            if path == "/home/dietpi/.local/bin/gentle-shell" {
+                Probe::Unknown
+            } else {
+                Probe::Absent
+            }
+        },
+    );
+    assert!(paths.iter().all(|p| !p.starts_with("/srv/")));
+    assert!(result[1].executable.is_none());
 }
 
 #[test]
