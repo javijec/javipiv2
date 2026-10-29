@@ -12,10 +12,10 @@ S5. "Restricciones: no sudo, push, instalaciones, modificaciones productivas ni 
 - T1 [S1,S5] done: local privacy review found no concrete defect; 7 integration and 1 TUI tests passed; Remote-B commit: 23bf111
 - T2 [S2,S5] done: catalogue and plan status review, 4 catalogue tests passed; commit: 2c15eaf
 - T3 [S3,S4,S5] done: offline Developer version comparison, suite ARM64 119 passed 1 ignored; commit: 1f15bd3
-- T4 [S3,S4,S5] done: offline Watchdog assessment, ARM64 suite and checks passed; commit: work unit containing this line
+- T4 [S3,S4,S5] done: offline Watchdog assessment, ARM64 suite and checks passed; commit: 93fa73e
 
 ## Log
-L3. Increment work units: 1f15bd3 (Developer); final Watchdog unit contains T4. Native assessment could not inspect unrelated untracked files; external reviewers were not retried. Both increments are CLI-only because the existing TUI cannot accept their explicit inputs.
+L3. Increment work units: 1f15bd3 (Developer), 93fa73e (Watchdog). Native assessment could not inspect unrelated untracked files; external reviewers were not retried. Both increments are CLI-only because the existing TUI cannot accept their explicit inputs.
 L2. Remote-B review: fixed /proc inputs, bounded reads, no raw socket data in output, no Tailscale socket connection. Independent external review unavailable under earlier operator restriction; interactive Remote-B TUI remains pending. No correction identified.
 L1. JaviPiV2 — Quiero avanzar varios pasos del plan en una sola sesión, sin pedirme autorización entre etapas seguras.
 
