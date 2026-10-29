@@ -1,5 +1,6 @@
 pub mod agents;
 pub mod backups;
+pub mod developer;
 pub mod docker;
 pub mod health;
 pub mod preflight;

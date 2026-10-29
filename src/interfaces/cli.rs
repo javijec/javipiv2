@@ -3,7 +3,8 @@
 use crate::core::catalog::{all_modules, profile_modules};
 use crate::core::minimal_simulation::MinimalSimulation;
 use crate::modules::{
-    agents, backups, docker, health, preflight, projects, remote, services, storage, updates,
+    agents, backups, developer, docker, health, preflight, projects, remote, services, storage,
+    updates,
 };
 use std::ffi::OsString;
 use std::io::Read;
@@ -26,6 +27,7 @@ fn help() {
     println!("  backup inspect --stdin  Observar snapshots JSON suministrados por stdin");
     println!("  storage status         Montajes relevantes (observación pasiva)");
     println!("  updates check          Comparar componentes con upstream (requiere red)");
+    println!("  developer compare <instalada> <referencia>  Comparar datos suministrados, sin red");
     println!("  agents status          Observar ejecutables y versiones npm locales (sin red)");
     println!("  remote status          Observar unidades y TCP local sin atribución (sin red)");
     println!("  docker status          Consultar daemon Docker local");
@@ -181,6 +183,16 @@ pub fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), String> {
             println!("Resultado del último intento: desconocido");
         }
         ["updates", "check"] => println!("{}", format_updates(&updates::check())),
+        ["developer", "compare", installed, reference] => {
+            let result = match developer::compare(installed, reference) {
+                updates::Comparison::Current => "iguales",
+                updates::Comparison::Available => "primera menor",
+                updates::Comparison::InstalledNewer => "primera mayor",
+                updates::Comparison::Unknown => "desconocido",
+            };
+            println!("Versiones suministradas por el usuario; no acreditan instalación ni disponibilidad.");
+            println!("Resultado: {result}");
+        }
         ["remote", "status"] => {
             println!("Estado de servicios locales; no demuestra conectividad.");
             for observation in remote::status() {

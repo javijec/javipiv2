@@ -13,6 +13,7 @@ cargo run --locked -- help
 cargo run --locked -- status
 cargo run --locked -- storage status
 cargo run --locked -- updates check
+cargo run --locked -- developer compare 1.2.3 1.3.0
 cargo run --locked -- agents status
 cargo run --locked -- remote status
 cargo run --locked -- service list
@@ -46,6 +47,10 @@ F3-B prepara un ejecutor con argumentos separados y una política independiente 
 `project list` y `project status <nombre>` consultan carpetas directas de `/srv/workspaces`; `JAVIPIV2_WORKSPACES` permite configurar otra ruta absoluta bajo `/srv`. Antes de abrirla se exige evidencia pasiva en `/proc/self/mountinfo` de ext4 con raíz `/` en `/srv`, solo o directamente sobre una capa autofs. Se rechazan montajes que afecten la ruta consultada: para `list`, todo el árbol de workspaces; para `status`, sus antecesores y el árbol del proyecto elegido. Montajes ajenos como `/srv/docker` no bloquean la consulta. Si falta evidencia se informa `unknown` y no se recorre `/srv`. No demuestra la identidad física del disco ni garantiza excluir bind mounts; la comprobación tiene una ventana de carrera frente a cambios de montaje. Las operaciones futuras con efectos requieren comprobar identidad. No se consulta capacidad. Se leen directamente metadatos Git sin ejecutar Git ni shell, sin seguir enlaces; worktrees con archivo `.git`, metadatos inaccesibles y formatos no reconocidos quedan desconocidos. La categoría `compatible (validez no verificada)` solo indica metadatos con forma reconocible: no verifica objetos, integridad ni validez real del repositorio. Una referencia suelta inaccesible o inválida no se sustituye por un valor posiblemente obsoleto de `packed-refs`. Los nombres de carpetas no UTF-8 provocan un error `unknown` en lugar de omitirlas. No se consultan cambios, remotos ni sincronización. Las pruebas sintéticas de F2-D pasaron; su funcionamiento con proyectos reales sigue pendiente de validación.
 
 `storage status` primero comprueba `/proc/self/mountinfo` y solo consulta capacidad si confirma inequívocamente ext4 activo en `/srv`. Informa total, usado y disponible; disponible excluye los bloques reservados, que se muestran aparte. Si mountinfo es ambiguo o falla, o falla la consulta de capacidad, se muestra `desconocido` y no se reintenta. La consulta de estadísticas de `/srv` puede activar autofs: existe una ventana TOCTOU entre la instantánea de mountinfo y la consulta, por lo que el montaje puede cambiar durante ese intervalo. No monta dispositivos explícitamente ni modifica datos. También informa overlays Docker reconocidos por ruta y no clasifica otros montajes como datos. No verifica identidad física, exclusión de bind mounts, salud, UUID ni SMART, y no administra discos. La vista Storage de la TUI reutiliza esta consulta al pulsar R; errores internos no se exponen.
+
+## Comparación Developer offline
+
+`developer compare <instalada> <referencia>` compara exclusivamente dos valores suministrados por el usuario, no versiones instaladas ni disponibilidad de actualizaciones. Admite exactamente tres componentes numéricos ASCII separados por puntos, de 1 a 9 dígitos cada uno; entradas no admitidas producen `desconocido`. No abre rutas, usa red ni ejecuta herramientas. No se agrega vista TUI: la operación requiere dos argumentos explícitos y la interfaz actual no ofrece entrada de texto para ellos.
 
 ## Consulta de componentes
 

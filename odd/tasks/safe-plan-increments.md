@@ -10,8 +10,8 @@ S5. "Restricciones: no sudo, push, instalaciones, modificaciones productivas ni 
 
 ## Tasks
 - T1 [S1,S5] done: local privacy review found no concrete defect; 7 integration and 1 TUI tests passed; Remote-B commit: 23bf111
-- T2 [S2,S5] catalogue and plan status review; commit: pending
-- T3 [S3,S4,S5] offline Developer version comparison from supplied input, reuse Updates; commit: pending
+- T2 [S2,S5] done: catalogue and plan status review, 4 catalogue tests passed; commit: 2c15eaf
+- T3 [S3,S4,S5] in progress: offline Developer version comparison from supplied input, reuse Updates; commit: pending
 - T4 [S3,S4,S5] offline Watchdog health assessment with explicit caller thresholds, no automation; commit: pending
 
 ## Log
