@@ -9,3 +9,4 @@ pub mod remote;
 pub mod services;
 pub mod storage;
 pub mod updates;
+pub mod watchdog;

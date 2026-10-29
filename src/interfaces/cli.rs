@@ -4,7 +4,7 @@ use crate::core::catalog::{all_modules, profile_modules};
 use crate::core::minimal_simulation::MinimalSimulation;
 use crate::modules::{
     agents, backups, developer, docker, health, preflight, projects, remote, services, storage,
-    updates,
+    updates, watchdog,
 };
 use std::ffi::OsString;
 use std::io::Read;
@@ -28,6 +28,7 @@ fn help() {
     println!("  storage status         Montajes relevantes (observación pasiva)");
     println!("  updates check          Comparar componentes con upstream (requiere red)");
     println!("  developer compare <instalada> <referencia>  Comparar datos suministrados, sin red");
+    println!("  watchdog memory <total-kib> <available-kib> <minimum-percent>  Evaluar valores suministrados, sin monitoreo");
     println!("  agents status          Observar ejecutables y versiones npm locales (sin red)");
     println!("  remote status          Observar unidades y TCP local sin atribución (sin red)");
     println!("  docker status          Consultar daemon Docker local");
@@ -191,6 +192,15 @@ pub fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), String> {
                 updates::Comparison::Unknown => "desconocido",
             };
             println!("Versiones suministradas por el usuario; no acreditan instalación ni disponibilidad.");
+            println!("Resultado: {result}");
+        }
+        ["watchdog", "memory", total, available, minimum] => {
+            let result = match watchdog::assess_memory(total, available, minimum) {
+                watchdog::Assessment::Healthy => "saludable",
+                watchdog::Assessment::BelowMinimum => "por debajo del mínimo",
+                watchdog::Assessment::Unknown => "desconocido",
+            };
+            println!("Valores suministrados por el usuario; no son monitoreo real.");
             println!("Resultado: {result}");
         }
         ["remote", "status"] => {
