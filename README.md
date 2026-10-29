@@ -26,6 +26,7 @@ cargo run --locked -- docker inspect ejemplo
 cargo run --locked -- module list
 cargo run --locked -- plan minimal
 cargo run --locked -- preflight minimal
+cargo run --locked -- diagnose minimal
 cargo run --locked -- simulate plan minimal
 cargo run --locked -- simulate minimal
 cargo test --locked
@@ -119,6 +120,8 @@ bash installer/bootstrap.sh --plan developer
 El bootstrap **solo inspecciona y presenta perfiles**. No descarga ni instala paquetes, no escribe en `/etc`, no toca `/srv`, no prepara particiones y no usa `sudo`. La instalación automatizada está planificada para F1, no existe aún.
 
 Los perfiles están en `profiles/`, y el catálogo único de módulos está en `catalog/modules.tsv`. El mismo catálogo se compila en Rust para el CLI. `module list` y `plan` validan las referencias y la ausencia de ciclos en todo el catálogo, incluso fuera del perfil elegido. La biblioteca expone `core::catalog::parse_catalog` para validar datos declarativos suministrados por el llamador, sin leer archivos ni consultar el host; un inventario válido no acredita instalación. Las 21 áreas cubren las funcionalidades del proyecto original, pero casi todas siguen en estado `planned`.
+
+`diagnose minimal` y la vista TUI Installation, mediante R manual, comparan los cuatro requisitos declarativos con la evidencia de instalación disponible. Actualmente todos son **no verificados**: no existe una fuente que confirme instalación ni ausencia de JaviPiV2. Por separado consultan Health (`/proc`), Storage (mountinfo, sin acceder a `/srv`) y la lista de servicios de systemd; esas señales ambientales no acreditan instalación ni propiedad. Un error de fuente se muestra sin sus detalles y no cambia el estado de instalación. El plan ejecutable permanece indefinido; no se escriben checkpoints ni se administra ningún servicio. La consulta inicial de Health que ya realiza la TUI no cambia.
 
 `simulate plan <minimal|developer|full>` muestra efectos simulados deterministas del sandbox en memoria: dependencias no verificadas e instalación indefinida y bloqueada. No consulta el host, abre archivos, usa red, ejecuta acciones ni guarda checkpoints; no autoriza instalaciones. Es independiente de `simulate minimal`, que conserva su preflight de solo lectura.
 

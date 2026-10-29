@@ -22,7 +22,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-const NAMES: [&str; 13] = [
+const NAMES: [&str; 14] = [
     "Health",
     "Services",
     "Docker",
@@ -36,6 +36,7 @@ const NAMES: [&str; 13] = [
     "Overview",
     "Clean",
     "Planning",
+    "Installation",
 ];
 const LIMIT: Duration = Duration::from_secs(10);
 
@@ -181,6 +182,7 @@ fn query_error(view: usize) -> &'static str {
         8 => "Error al consultar Watchdog; datos anteriores",
         9 => "Error al consultar Developer; datos anteriores",
         11 => "Error al consultar Clean; datos anteriores",
+        13 => "Error al consultar Installation; datos anteriores",
         _ => "Error al consultar vista; datos anteriores",
     }
 }
@@ -193,18 +195,18 @@ struct Worker {
 struct App {
     selected: usize,
     view: usize,
-    content: [String; 13],
-    data: [Option<Data>; 13],
-    status: [Option<String>; 13],
-    failed: [bool; 13],
-    last_error: [Option<String>; 13],
+    content: [String; 14],
+    data: [Option<Data>; 14],
+    status: [Option<String>; 14],
+    failed: [bool; 14],
+    last_error: [Option<String>; 14],
     worker: Option<Worker>,
     notice: Option<String>,
     row: usize,
     column: usize,
     list_row: usize,
     list_column: usize,
-    item: [usize; 13],
+    item: [usize; 14],
     table_focus: bool,
     detail: bool,
     height: usize,
@@ -219,7 +221,7 @@ impl App {
             }),
             data: std::array::from_fn(|_| None),
             status: std::array::from_fn(|_| None),
-            failed: [false; 13],
+            failed: [false; 14],
             last_error: std::array::from_fn(|_| None),
             worker: None,
             notice: None,
@@ -227,7 +229,7 @@ impl App {
             column: 0,
             list_row: 0,
             list_column: 0,
-            item: [0; 13],
+            item: [0; 14],
             table_focus: false,
             detail: false,
             height: 0,
@@ -239,7 +241,7 @@ impl App {
             for (i, name) in NAMES
                 .iter()
                 .enumerate()
-                .filter(|(i, _)| *i != 10 && *i != 12)
+                .filter(|(i, _)| *i != 10 && *i != 12 && *i != 13)
             {
                 let state = if self.failed[i] {
                     "error"
@@ -464,7 +466,11 @@ impl App {
             KeyCode::Esc if self.table_focus => self.table_focus = false,
             KeyCode::Esc => return false,
             KeyCode::Tab
-                if !self.detail && self.view != 0 && self.view != 10 && self.view != 12 =>
+                if !self.detail
+                    && self.view != 0
+                    && self.view != 10
+                    && self.view != 12
+                    && self.view != 13 =>
             {
                 self.table_focus = !self.table_focus;
                 if self.table_focus {
@@ -557,6 +563,8 @@ fn query(view: usize) -> Answer {
         8 => Ok(Data::Watchdog(watchdog::status("20"))),
         9 => Ok(Data::Developer(agents::status())),
         11 => Ok(Data::Clean(clean::observe())),
+        13 => crate::modules::installation::diagnose()
+            .map(|report| Data::Health(report.to_string(), false)),
         _ => Err("vista desconocida".into()),
     }
 }
@@ -663,11 +671,26 @@ pub fn run() -> Result<(), String> {
 mod tests {
     use super::*;
     #[test]
+    fn installation_requires_manual_request() {
+        fn fake(view: usize) -> Answer {
+            assert_eq!(view, 13);
+            Ok(Data::Health("synthetic installation evidence".into(), true))
+        }
+        let mut app = App::new();
+        app.key_with(KeyCode::Up, fake);
+        assert_eq!(NAMES[app.selected], "Installation");
+        app.key_with(KeyCode::Enter, fake);
+        assert!(app.worker.is_none());
+        app.key_with(KeyCode::Char('R'), fake);
+        assert_eq!(app.worker.as_ref().map(|w| w.view), Some(13));
+    }
+    #[test]
     fn planning_is_manual_and_never_queries_host() {
         fn forbidden(_: usize) -> Answer {
             panic!("Planning must not query host")
         }
         let mut app = App::new();
+        app.key_with(KeyCode::Up, forbidden);
         app.key_with(KeyCode::Up, forbidden);
         assert_eq!(NAMES[app.selected], "Planning");
         app.key_with(KeyCode::Enter, forbidden);
@@ -678,6 +701,8 @@ mod tests {
         assert!(app.text().contains("Plan simulado: minimal"));
         assert!(app.text().contains("dependencias no verificadas"));
         assert!(app.text().contains("instalación indefinida y bloqueada"));
+        app.key_with(KeyCode::Down, forbidden);
+        assert_eq!(NAMES[app.selected], "Installation");
         app.key_with(KeyCode::Down, forbidden);
         assert_eq!(app.selected, 0);
     }
@@ -737,6 +762,8 @@ mod tests {
             app.selected = 0;
             check(&mut terminal, &app, "> Health");
             app.key(KeyCode::Up);
+            check(&mut terminal, &app, "> Installation");
+            app.key(KeyCode::Up);
             check(&mut terminal, &app, "> Planning");
             app.key(KeyCode::Up);
             check(&mut terminal, &app, "> Clean");
@@ -744,6 +771,7 @@ mod tests {
             check(&mut terminal, &app, "> Overview");
             app.key(KeyCode::Up);
             check(&mut terminal, &app, "> Developer");
+            app.key(KeyCode::Down);
             app.key(KeyCode::Down);
             app.key(KeyCode::Down);
             app.key(KeyCode::Down);
@@ -1049,6 +1077,9 @@ mod tests {
         app.key(KeyCode::Down);
         app.key(KeyCode::Enter);
         assert_eq!(app.view, 12);
+        app.key(KeyCode::Down);
+        app.key(KeyCode::Enter);
+        assert_eq!(app.view, 13);
         app.key(KeyCode::Down);
         app.key(KeyCode::Enter);
         assert_eq!(app.view, 0);

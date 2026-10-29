@@ -47,6 +47,9 @@ fn help() {
     println!("  simulate plan <minimal|developer|full>  Plan simulado, dependencias no verificadas e instalación bloqueada");
     println!("  simulate minimal       Progreso simulado de solo lectura, sin instalar");
     println!("  simulate minimal --fixture  Simulación con evidencia de stdin");
+    println!(
+        "  diagnose minimal       Instalación no verificada y señales ambientales de solo lectura"
+    );
     println!("  preflight minimal      Diagnóstico y dependencias de solo lectura");
     println!("  preflight minimal --fixture  Diagnóstico simulado desde stdin");
     println!("  version                Versión del proyecto");
@@ -351,6 +354,7 @@ pub fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), String> {
             }
             print!("{}", simulation.report());
         }
+        ["diagnose", "minimal"] => println!("{}", crate::modules::installation::diagnose()?),
         ["preflight", "minimal"] => preflight::run(false)?,
         ["preflight", "minimal", "--fixture"] => preflight::run(true)?,
         ["plan", profile] => {
