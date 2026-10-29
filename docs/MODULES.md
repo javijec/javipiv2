@@ -4,7 +4,7 @@ El archivo `catalog/modules.tsv` declara 21 áreas funcionales. Sus columnas, se
 
 Los perfiles `profiles/{minimal,developer,full}.list` contienen una lista ordenada de identificadores del catálogo. Un módulo siempre aparece después de todas sus dependencias obligatorias. `cargo run --locked -- module list` inspecciona el catálogo embebido y `cargo run --locked -- plan full` muestra el perfil completo, **sin instalar ni habilitar componentes**.
 
-El catálogo no es un inventario de implementación: existen módulos Rust para Health, Storage, Services, Projects, Docker, Backups, Updates, Agents y Remote, entre otros. Consulta `PLAN.md` y el código para conocer el alcance y la validación de cada uno. Para futuras operaciones se exigirá separar instalación de habilitación y eliminación de datos, así como comprobar errores y recuperación específica.
+El catálogo no es un inventario de implementación. Hay código parcial para core, health, storage, services, projects, developer, agents, remote, docker, backups, updates, watchdog y tui; esto no significa que esas áreas estén completas o instaladas. AI, engram, deploy, engram-cloud, notifications, clean, dashboard y telegram permanecen como áreas sin módulo funcional propio. Consulta `PLAN.md` y el código para conocer el alcance y la validación de cada uno. Para futuras operaciones se exigirá separar instalación de habilitación y eliminación de datos, así como comprobar errores y recuperación específica.
 
 `preflight minimal` muestra las dependencias declaradas en orden, pero informa presencia y acciones como desconocidas; no deduce instalación del catálogo. El plan exacto y el mecanismo de idempotencia y reanudación siguen pendientes.
 
