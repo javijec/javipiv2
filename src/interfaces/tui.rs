@@ -21,7 +21,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-const NAMES: [&str; 10] = [
+const NAMES: [&str; 11] = [
     "Health",
     "Services",
     "Docker",
@@ -32,6 +32,7 @@ const NAMES: [&str; 10] = [
     "Remote",
     "Watchdog",
     "Developer",
+    "Overview",
 ];
 const LIMIT: Duration = Duration::from_secs(10);
 
@@ -46,9 +47,32 @@ enum Data {
     Updates(Vec<updates::Observation>),
     Agents(Vec<agents::Observation>),
     Remote(Vec<remote::Observation>),
-    Developer(Vec<String>),
+    Developer(Vec<agents::Observation>),
 }
 impl Data {
+    fn has_evidence(&self) -> bool {
+        let known = |value: &Option<String>| {
+            value
+                .as_ref()
+                .is_some_and(|s| !s.is_empty() && s != "-" && s != "desconocido")
+        };
+        match self {
+            Self::Health(_) | Self::Remote(_) => false,
+            Self::Watchdog(a) => *a != watchdog::Assessment::Unknown,
+            Self::Services(v) => v
+                .iter()
+                .any(|s| known(&s.load) || known(&s.active) || known(&s.sub)),
+            Self::Docker(v) => !v.is_empty(),
+            Self::Projects(v) => !v.is_empty(),
+            Self::Storage(s, c) => {
+                s.autofs || s.srv_ext4 || !s.docker_overlays.is_empty() || c.is_some()
+            }
+            Self::Updates(v) => v.iter().any(|o| known(&o.installed) || known(&o.upstream)),
+            Self::Agents(v) | Self::Developer(v) => {
+                v.iter().any(|o| known(&o.version) || known(&o.executable))
+            }
+        }
+    }
     fn len(&self) -> usize {
         match self {
             Self::Health(_) | Self::Watchdog(_) => 0,
@@ -74,7 +98,7 @@ impl Data {
             Self::Updates(v) => v.get(index).map(updates::Observation::line),
             Self::Agents(v) => v.get(index).map(agents::Observation::line),
             Self::Remote(v) => v.get(index).map(remote::Observation::line),
-            Self::Developer(v) => v.get(index).cloned(),
+            Self::Developer(v) => v.get(index).map(|item| developer::status_from(vec![item.clone()]).remove(0)),
             Self::Storage(status, capacity) => (index == 0).then(|| {
                 let capacity = capacity.map_or_else(|| "desconocido".to_owned(), |c| format!(
                     "total={} B, usada={} B, disponible={} B, reservada={} B", c.total_bytes, c.used_bytes, c.available_bytes, c.reserved_bytes));
@@ -162,16 +186,18 @@ struct Worker {
 struct App {
     selected: usize,
     view: usize,
-    content: [String; 10],
-    data: [Option<Data>; 10],
-    status: [Option<String>; 10],
+    content: [String; 11],
+    data: [Option<Data>; 11],
+    status: [Option<String>; 11],
+    failed: [bool; 11],
+    last_error: [Option<String>; 11],
     worker: Option<Worker>,
     notice: Option<String>,
     row: usize,
     column: usize,
     list_row: usize,
     list_column: usize,
-    item: [usize; 10],
+    item: [usize; 11],
     table_focus: bool,
     detail: bool,
     height: usize,
@@ -186,19 +212,45 @@ impl App {
             }),
             data: std::array::from_fn(|_| None),
             status: std::array::from_fn(|_| None),
+            failed: [false; 11],
+            last_error: std::array::from_fn(|_| None),
             worker: None,
             notice: None,
             row: 0,
             column: 0,
             list_row: 0,
             list_column: 0,
-            item: [0; 10],
+            item: [0; 11],
             table_focus: false,
             detail: false,
             height: 0,
         }
     }
     fn text(&self) -> String {
+        if self.view == 10 {
+            let mut text = String::from("Solo resultados almacenados; disponible indica evidencia, no instalación ni salud. Remote no demuestra conectividad. R no consulta.\n");
+            for (i, name) in NAMES[..10].iter().enumerate() {
+                let state = if self.failed[i] {
+                    "error"
+                } else {
+                    match &self.data[i] {
+                        None => "no consultado",
+                        Some(data) if data.has_evidence() => "disponible",
+                        Some(_) => "desconocido",
+                    }
+                };
+                text.push_str(&format!("\n{name}: {state}"));
+                if self.failed[i] {
+                    if self.data[i].is_some() {
+                        text.push_str(" (datos anteriores, pueden estar desactualizados)");
+                    }
+                    if let Some(status) = &self.last_error[i] {
+                        text.push_str(&format!(" — {status}"));
+                    }
+                }
+            }
+            return text;
+        }
         let mut text = match &self.data[self.view] {
             None => self.content[self.view].clone(),
             Some(Data::Health(text)) => text.clone(),
@@ -298,6 +350,9 @@ impl App {
         self.request_with(query);
     }
     fn request_with(&mut self, query_fn: fn(usize) -> Answer) {
+        if self.view == 10 {
+            return;
+        }
         if self.worker.is_some() {
             self.notice = Some("Hay una consulta en curso; esperá a que termine".into());
             return;
@@ -320,7 +375,9 @@ impl App {
                 });
             }
             Err(_) => {
-                self.status[view] = Some("Error al iniciar consulta; datos anteriores".into())
+                self.failed[view] = true;
+                self.status[view] = Some("Error al iniciar consulta; datos anteriores".into());
+                self.last_error[view] = self.status[view].clone();
             }
         }
     }
@@ -337,6 +394,8 @@ impl App {
                         self.item[view] = self.item[view].min(data.len().saturating_sub(1));
                         self.data[view] = Some(data);
                         self.status[view] = None;
+                        self.failed[view] = false;
+                        self.last_error[view] = None;
                         if view == self.view && self.detail {
                             self.detail = false;
                             self.row = self.list_row;
@@ -344,7 +403,9 @@ impl App {
                         }
                     }
                     Err(_) => {
+                        self.failed[view] = true;
                         self.status[view] = Some(query_error(view).into());
+                        self.last_error[view] = self.status[view].clone();
                     }
                 }
                 self.worker = None;
@@ -353,8 +414,10 @@ impl App {
                 }
             }
             Err(mpsc::TryRecvError::Disconnected) => {
+                self.failed[worker.view] = true;
                 self.status[worker.view] =
                     Some("Error: la consulta terminó inesperadamente (datos anteriores)".into());
+                self.last_error[worker.view] = self.status[worker.view].clone();
                 self.notice = None;
                 self.worker = None;
             }
@@ -381,7 +444,7 @@ impl App {
             }
             KeyCode::Esc if self.table_focus => self.table_focus = false,
             KeyCode::Esc => return false,
-            KeyCode::Tab if !self.detail && self.view != 0 => {
+            KeyCode::Tab if !self.detail && self.view != 0 && self.view != 10 => {
                 self.table_focus = !self.table_focus;
                 if self.table_focus {
                     self.keep_visible();
@@ -414,6 +477,7 @@ impl App {
             KeyCode::Enter if !self.detail => {
                 if self.view != self.selected {
                     self.view = self.selected;
+                    self.table_focus = false;
                     self.row = 0;
                     self.column = 0;
                     self.notice = None;
@@ -470,7 +534,7 @@ fn query(view: usize) -> Answer {
         6 => Ok(Data::Agents(agents::status())),
         7 => Ok(Data::Remote(remote::status())),
         8 => Ok(Data::Watchdog(watchdog::status("20"))),
-        9 => Ok(Data::Developer(developer::status())),
+        9 => Ok(Data::Developer(agents::status())),
         _ => Err("vista desconocida".into()),
     }
 }
@@ -557,6 +621,177 @@ pub fn run() -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn overview_is_passive_and_reports_cached_states() {
+        fn forbidden(_: usize) -> Answer {
+            panic!("overview queried")
+        }
+        let mut app = App::new();
+        app.selected = 10;
+        app.key_with(KeyCode::Enter, forbidden);
+        app.key_with(KeyCode::Char('R'), forbidden);
+        assert!(app.worker.is_none());
+        assert!(app.text().contains("Watchdog: no consultado"));
+        app.data[8] = Some(Data::Watchdog(watchdog::Assessment::Unknown));
+        assert!(app.text().contains("Watchdog: desconocido"));
+        app.data[8] = Some(Data::Watchdog(watchdog::Assessment::Healthy));
+        assert!(app.text().contains("Watchdog: disponible"));
+        app.status[8] = Some(query_error(8).into());
+        app.failed[8] = true;
+        app.last_error[8] = app.status[8].clone();
+        assert!(app.text().contains("Watchdog: error"));
+        assert!(app.text().contains("datos anteriores"));
+    }
+
+    #[test]
+    fn overview_typed_evidence_and_failed_refresh() {
+        let mut app = App::new();
+        app.view = 10;
+        app.data[6] = Some(Data::Agents(vec![agents::Observation {
+            name: "x",
+            version: None,
+            executable: None,
+        }]));
+        app.data[9] = Some(Data::Developer(vec![agents::Observation {
+            name: "x",
+            version: None,
+            executable: None,
+        }]));
+        app.data[7] = Some(Data::Remote(remote::status_with_tcp(
+            |_| Err("error".into()),
+            Err(()),
+            Err(()),
+        )));
+        assert!(app.text().contains("Agents: desconocido"));
+        assert!(app.text().contains("Developer: desconocido"));
+        assert!(app.text().contains("Remote: desconocido"));
+        app.data[9] = Some(Data::Developer(vec![agents::Observation {
+            name: "x",
+            version: Some("1.2.3".into()),
+            executable: None,
+        }]));
+        assert!(app.text().contains("Developer: disponible"));
+        let (sender, receiver) = mpsc::channel();
+        app.worker = Some(Worker {
+            view: 9,
+            started: Instant::now(),
+            receiver,
+            timed_out: false,
+        });
+        sender.send(Err("private".into())).unwrap();
+        app.update();
+        let text = app.text();
+        assert!(text.contains("Developer: error (datos anteriores, pueden estar desactualizados)"));
+        assert!(text.contains(query_error(9)));
+        assert!(!text.contains("private"));
+    }
+
+    #[test]
+    fn overview_all_views_evidence_boundaries_and_errors() {
+        let observation = |version: Option<&str>, executable: Option<&str>| agents::Observation {
+            name: "synthetic",
+            version: version.map(str::to_owned),
+            executable: executable.map(str::to_owned),
+        };
+        let update = |installed: Option<&str>, upstream: Option<&str>| updates::Observation {
+            name: "synthetic",
+            installed: installed.map(str::to_owned),
+            upstream: upstream.map(str::to_owned),
+            comparison: updates::Comparison::Unknown,
+        };
+        let unknown = vec![
+            Data::Health(String::new()),
+            Data::Services(vec![service("a")]),
+            Data::Docker(vec![]),
+            Data::Projects(vec![]),
+            Data::Storage(storage::StorageStatus::default(), None),
+            Data::Updates(vec![update(None, None)]),
+            Data::Agents(vec![observation(None, None)]),
+            Data::Remote(vec![]),
+            Data::Watchdog(watchdog::Assessment::Unknown),
+            Data::Developer(vec![observation(None, None)]),
+        ];
+        let present = vec![
+            Data::Health("synthetic health".into()),
+            Data::Services(vec![services::Service {
+                name: "a".into(),
+                load: Some("not-found".into()),
+                active: None,
+                sub: None,
+            }]),
+            Data::Docker(vec![docker::Container {
+                name: "a".into(),
+                id: "b".into(),
+                image: "c".into(),
+                state: "stopped".into(),
+            }]),
+            Data::Projects(vec![projects::Project {
+                name: "a".into(),
+                git: projects::GitState::Unknown,
+                branch: None,
+                head: None,
+            }]),
+            Data::Storage(
+                storage::StorageStatus {
+                    autofs: true,
+                    ..Default::default()
+                },
+                None,
+            ),
+            Data::Updates(vec![update(None, Some("1.2.3"))]),
+            Data::Agents(vec![observation(None, Some("synthetic"))]),
+            Data::Remote(remote::status_with(|unit| {
+                Ok(services::Service {
+                    name: unit.into(),
+                    load: Some("loaded".into()),
+                    active: Some("active".into()),
+                    sub: None,
+                })
+            })),
+            Data::Watchdog(watchdog::Assessment::BelowMinimum),
+            Data::Developer(vec![observation(Some("1.2.3"), None)]),
+        ];
+        let mut app = App::new();
+        app.view = 10;
+        for name in &NAMES[..10] {
+            assert!(
+                app.text().contains(&format!("{name}: no consultado")),
+                "{name}"
+            );
+        }
+        for (i, data) in unknown.into_iter().enumerate() {
+            app.data[i] = Some(data);
+            assert!(app.text().contains(&format!("{}: desconocido", NAMES[i])));
+        }
+        for (i, data) in present.into_iter().enumerate() {
+            app.data[i] = Some(data);
+            let expected = if i == 0 || i == 7 {
+                "desconocido"
+            } else {
+                "disponible"
+            };
+            assert!(app.text().contains(&format!("{}: {expected}", NAMES[i])));
+            let before = format!("{:?}", app.data[i]);
+            let (sender, receiver) = mpsc::channel();
+            app.worker = Some(Worker {
+                view: i,
+                started: Instant::now(),
+                receiver,
+                timed_out: false,
+            });
+            sender.send(Err("private error".into())).unwrap();
+            app.update();
+            let text = app.text();
+            assert!(text.contains(&format!(
+                "{}: error (datos anteriores, pueden estar desactualizados) — {}",
+                NAMES[i],
+                query_error(i)
+            )));
+            assert!(!text.contains("private error"));
+            assert_eq!(before, format!("{:?}", app.data[i]));
+        }
+    }
+
     fn service(name: &str) -> services::Service {
         services::Service {
             name: name.into(),
@@ -580,13 +815,11 @@ mod tests {
     fn developer_manual_request_and_navigation() {
         fn fake(view: usize) -> Answer {
             assert_eq!(view, 9);
-            Ok(Data::Developer(developer::status_from(vec![
-                agents::Observation {
-                    name: "Pi Agent",
-                    version: Some("1.2.3".into()),
-                    executable: None,
-                },
-            ])))
+            Ok(Data::Developer(vec![agents::Observation {
+                name: "Pi Agent",
+                version: Some("1.2.3".into()),
+                executable: None,
+            }]))
         }
         fn fail(_: usize) -> Answer {
             Err("private error".into())
@@ -667,6 +900,9 @@ mod tests {
         app.key(KeyCode::Down);
         app.key(KeyCode::Enter);
         assert_eq!(app.view, 9);
+        app.key(KeyCode::Down);
+        app.key(KeyCode::Enter);
+        assert_eq!(app.view, 10);
         app.key(KeyCode::Down);
         app.key(KeyCode::Enter);
         assert_eq!(app.view, 0);
