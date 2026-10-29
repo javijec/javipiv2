@@ -10,7 +10,7 @@ use crossterm::{
 use ratatui::{
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout},
-    widgets::{Block, Borders, List, ListItem, Paragraph},
+    widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
     Terminal,
 };
 use std::{
@@ -579,6 +579,26 @@ impl Drop for Screen {
     }
 }
 
+fn render_menu(frame: &mut ratatui::Frame<'_>, area: ratatui::layout::Rect, selected: usize) {
+    let items = NAMES
+        .iter()
+        .enumerate()
+        .map(|(i, name)| {
+            ListItem::new(format!(
+                "{} {}",
+                if i == selected { ">" } else { " " },
+                name
+            ))
+        })
+        .collect::<Vec<_>>();
+    let mut state = ListState::default().with_selected(Some(selected));
+    frame.render_stateful_widget(
+        List::new(items).block(Block::default().borders(Borders::ALL).title("Módulos")),
+        area,
+        &mut state,
+    );
+}
+
 pub fn run() -> Result<(), String> {
     let mut screen = Screen::enter().map_err(|e| format!("terminal: {e}"))?;
     let result = (|| -> io::Result<()> {
@@ -590,8 +610,7 @@ pub fn run() -> Result<(), String> {
             app.clamp_scroll();
             terminal.draw(|frame| {
                 let areas = Layout::default().direction(Direction::Horizontal).constraints([Constraint::Length(20), Constraint::Min(1)]).split(frame.area());
-                let items = NAMES.iter().enumerate().map(|(i, name)| ListItem::new(format!("{} {}", if i == app.selected { ">" } else { " " }, name))).collect::<Vec<_>>();
-                frame.render_widget(List::new(items).block(Block::default().borders(Borders::ALL).title("Módulos")), areas[0]);
+                render_menu(frame, areas[0], app.selected);
                 let height = usize::from(areas[1].height.saturating_sub(2));
                 if app.height != height { app.height = height; if app.view != 0 && !app.detail { app.keep_visible(); } }
                 let text = app.visible_content(app.height);
@@ -622,6 +641,52 @@ pub fn run() -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn menu_selection_stays_visible_in_small_terminals() {
+        use ratatui::backend::TestBackend;
+        let mut app = App::new();
+        for height in [3, 4, 6, 14] {
+            let mut terminal = Terminal::new(TestBackend::new(20, height)).unwrap();
+            let check = |terminal: &mut Terminal<TestBackend>, app: &App, expected: &str| {
+                terminal
+                    .draw(|frame| render_menu(frame, frame.area(), app.selected))
+                    .unwrap();
+                let buffer = terminal.backend().buffer();
+                let rows = (0..height)
+                    .map(|y| (0..20).map(|x| buffer[(x, y)].symbol()).collect::<String>())
+                    .collect::<Vec<_>>();
+                assert!(
+                    rows.iter().any(|row| row.contains(expected)),
+                    "height={height}, rows={rows:?}"
+                );
+                assert!(rows[0].contains("Módulos"));
+                assert!(app.worker.is_none());
+            };
+            app.selected = 0;
+            check(&mut terminal, &app, "> Health");
+            app.key(KeyCode::Up);
+            check(&mut terminal, &app, "> Overview");
+            app.key(KeyCode::Up);
+            check(&mut terminal, &app, "> Developer");
+            app.key(KeyCode::Down);
+            app.key(KeyCode::Down);
+            check(&mut terminal, &app, "> Health");
+            app.key(KeyCode::Down);
+            check(&mut terminal, &app, "> Services");
+            app.key(KeyCode::Enter);
+            assert_eq!(app.view, 1);
+            assert!(app.worker.is_none());
+        }
+        for height in [0, 1, 2] {
+            let mut terminal = Terminal::new(TestBackend::new(20, height)).unwrap();
+            app.selected = 10;
+            terminal
+                .draw(|frame| render_menu(frame, frame.area(), app.selected))
+                .unwrap();
+            assert!(app.worker.is_none());
+        }
+    }
+
     #[test]
     fn overview_is_passive_and_reports_cached_states() {
         fn forbidden(_: usize) -> Answer {
