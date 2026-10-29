@@ -13,6 +13,12 @@ Este documento describe el contrato de lectura implementado y una propuesta para
 
 No se ha creado un instalador ni se ha escrito el registro real. Los fixtures viven en directorios temporales aislados del árbol de trabajo; el lector no ejecuta el binario.
 
+## Prototipo reversible exclusivo de pruebas
+
+`src/core/fixture_installer.rs` se compila únicamente bajo `cfg(test)` en Linux. Crea internamente un directorio privado bajo `target/`, sin aceptar una ruta de destino, y utiliza nombres relativos de fixture; no existe entrada CLI ni instalación productiva. La prueba publica un binario y un registro de ejemplo con `renameat2(RENAME_NOREPLACE)`, previa comprobación de colisiones, y registra las identidades de los temporales para recuperar estados posteriores al registro. Cada renombre es atómico por separado: ambos archivos no forman una transacción atómica.
+
+En ARM64, seis pruebas enfocadas y la suite completa (170 aprobadas, 1 ignorada) pasaron; formato, check, Clippy estricto y build también pasaron. La recuperación verifica identidad y contenido de todas las entradas antes de borrarlas y se niega si hay una colisión o modificación. **Esta garantía solo es válida bajo la suposición del test de que ningún proceso hostil concurrente del mismo usuario modifica la raíz privada.** La comprobación y el borrado no son una operación condicional atómica; no se debe reutilizar este prototipo en producción. Si la interrupción ocurre antes de registrar las identidades, la recuperación se detiene y conserva los temporales ambiguos. Los fallos inyectados no demuestran comportamiento ante pérdida de energía; no hay garantía de durabilidad ni de sincronización de los directorios. La limpieza final del directorio es parte exclusiva del fixture del test.
+
 ## Propuesta para la primera instalación reversible
 
 1. Acordar previamente la fuente del binario, su versión y arquitectura, el responsable de publicación y el criterio de confianza del digest; revisar el contrato v1 y sus límites antes de usarlo como evidencia productiva.
