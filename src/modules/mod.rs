@@ -4,6 +4,7 @@ pub mod clean;
 pub mod developer;
 pub mod docker;
 pub mod health;
+pub mod managed_units;
 pub mod preflight;
 pub mod projects;
 pub mod remote;

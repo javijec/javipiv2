@@ -17,8 +17,8 @@ S9. "No ejecutar instalaciones ni acciones administrativas reales, modificar Jav
 - T2 [S2,S9] done: whole-graph validation, 6 focused tests, 8 CLI differential cases; commit: 7cfbf85
 - T3 [S3,S9] done: deterministic declarative plans and 3 focused tests; commit: 30250bb
 - T4 [S4,S9] done: isolated in-memory sandbox, 3 tests and Clippy passed; commit: 5851ccf
-- T5 [S5,S9] in progress: bounded in-memory sandbox checkpoints and recovery; commit: pending
-- T6 [S6,S9] JaviPiV2-only managed unit registry; commit: pending
+- T5 [S5,S9] done: bounded checkpoint validation and replay, 5 tests and Clippy; commit: 085932d
+- T6 [S6,S9] in progress: separate JaviPiV2-owned unit registry with no execution; commit: pending
 - T7 [S7,S9] CLI/TUI planning and diagnostics; commit: pending
 - T8 [S8,S9] final ARM64 and documentation; commit: pending
 
