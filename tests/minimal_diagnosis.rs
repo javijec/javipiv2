@@ -31,9 +31,8 @@ fn synthetic_queries_do_not_claim_installation_or_leak_details() {
     )
     .unwrap();
     let text = report.to_string();
-    for module in ["core", "health", "storage", "services"] {
-        assert!(text.contains(&format!("{module}: no verificado")), "{text}");
-    }
+    assert!(text.contains("Binario: instalación desconocida"));
+    assert!(text.contains("Capacidades internas: core, health, storage, services"));
     for private in ["private-host", "/private-path", "private.service"] {
         assert!(!text.contains(private));
     }
@@ -74,7 +73,7 @@ fn partial_failures_and_recovery_never_change_installation_state() {
     assert!(recovered.contains("Health: disponible"));
     assert!(recovered.contains("Storage: desconocido"));
     assert!(recovered.contains("Services: desconocido"));
-    assert!(recovered.contains("core: no verificado"));
+    assert!(recovered.contains("Binario: instalación desconocida"));
     assert!(!recovered.contains("secret"));
 }
 
@@ -95,4 +94,43 @@ fn cli_help_and_invalid_profile_do_not_query_host() {
     assert!(!invalid.status.success());
     assert!(invalid.stdout.is_empty());
     assert!(!invalid.stderr.is_empty());
+}
+
+#[test]
+fn binary_is_one_installation_with_capabilities_not_packages() {
+    use javipiv2::modules::installation_registry::Availability;
+    let diagnosis = installation::diagnose_with_status(
+        Availability::Verified,
+        || Err(std::io::Error::other("x")),
+        || Err("x".into()),
+        || Err("x".into()),
+    )
+    .unwrap()
+    .to_string();
+    assert!(diagnosis.contains("Binario: instalado verificado"));
+    assert!(diagnosis.contains("Capacidades internas: core, health, storage, services"));
+    assert!(!diagnosis.contains("core: instalado"));
+}
+
+#[test]
+fn development_and_unknown_are_distinct_and_do_not_imply_absence() {
+    use javipiv2::modules::installation_registry::Availability;
+    for (status, label) in [
+        (
+            Availability::AvailableInDevelopment,
+            "disponible en desarrollo; instalación desconocida",
+        ),
+        (Availability::Unknown, "instalación desconocida"),
+    ] {
+        let report = installation::diagnose_with_status(
+            status,
+            || Err(std::io::Error::other("x")),
+            || Err("x".into()),
+            || Err("x".into()),
+        )
+        .unwrap()
+        .to_string();
+        assert!(report.contains(label));
+        assert!(!report.contains("ausente"));
+    }
 }

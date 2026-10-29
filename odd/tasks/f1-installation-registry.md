@@ -13,8 +13,8 @@ S8. "Después proponé los pasos necesarios para pasar a una primera instalació
 
 ## Tasks
 - T1 [S1-S5,S7] done: reviewed existing diagnosis and descriptor-based safe reading; see L2
-- T2 [S1-S5,S7] in progress: implement isolated registry model, validation and read-only integrity verification; commit: pending
-- T3 [S2,S4-S7] integrate status CLI/TUI with safe fixtures; commit: pending
+- T2 [S1-S5,S7] done: fixed-path descriptor-relative verifier, sha256, 5 fixture tests and Clippy; commit: 1f70a8a
+- T3 [S2,S4-S7] in progress: integrate binary status CLI/TUI with safe fixtures; commit: pending
 - T4 [S6-S8] ARM64 tests, documentation, reversible installation proposal; commit: pending
 
 ## Log

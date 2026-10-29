@@ -135,3 +135,29 @@ fn oversized_and_hardlinked_executable_are_unknown() {
         .unwrap();
     assert_eq!(f.verify(), Availability::Unknown);
 }
+
+#[test]
+fn verified_fixture_drives_one_binary_diagnosis() {
+    let f = Fixture::new();
+    let report = javipiv2::modules::installation::diagnose_with_status(
+        f.verify(),
+        || Err(std::io::Error::other("fixture")),
+        || Err("fixture".into()),
+        || Err("fixture".into()),
+    )
+    .unwrap()
+    .to_string();
+    assert!(report.contains("Binario: instalado verificado"));
+    assert!(report.contains("Capacidades internas: core, health, storage, services"));
+    fs::remove_file(f.0.join("var/lib/javipiv2/installation.json")).unwrap();
+    let report = javipiv2::modules::installation::diagnose_with_status(
+        f.verify(),
+        || Err(std::io::Error::other("fixture")),
+        || Err("fixture".into()),
+        || Err("fixture".into()),
+    )
+    .unwrap()
+    .to_string();
+    assert!(report.contains("Binario: instalación desconocida"));
+    assert!(!report.contains("ausente"));
+}
