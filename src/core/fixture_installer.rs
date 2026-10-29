@@ -18,13 +18,26 @@ const BINARY: &[u8] = b"fixture executable, not a host binary";
 const RECORD: &[u8] = br#"{"schema_version":1,"product_version":"0.1.0","executable":"/usr/local/bin/javipiv2","sha256":"d68067c32c21853f54e4bd4b50a28d115250619c7f144dece38ebcdf25a5492b"}"#;
 static NEXT: AtomicU64 = AtomicU64::new(0);
 
+#[derive(Clone, Copy, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Identity {
+    dev: u64,
+    ino: u64,
+}
+#[derive(Clone, Copy, Serialize, Deserialize)]
+enum Phase {
+    Prepared,
+    BinaryStaged,
+    BothStaged,
+    BinaryPublished,
+    BothPublished,
+}
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Journal {
-    binary_dev: u64,
-    binary_ino: u64,
-    record_dev: u64,
-    record_ino: u64,
+    phase: Phase,
+    binary: Option<Identity>,
+    record: Option<Identity>,
 }
 struct Fixture {
     root: PathBuf,
@@ -70,6 +83,7 @@ impl Fixture {
             "binary.tmp",
             "registry.tmp",
             "journal",
+            "journal.next",
         ] {
             if self.exists(name)? {
                 return Err(io::Error::new(
@@ -108,32 +122,73 @@ impl Fixture {
             Err(io::Error::last_os_error())
         }
     }
+    fn update_journal(&self, journal: &Journal, interrupted: bool) -> io::Result<()> {
+        self.create("journal.next", &serde_json::to_vec(journal)?)?;
+        if interrupted {
+            return Err(io::Error::other("injected journal update"));
+        }
+        // Exclusive fixture root: replace only our previously prepared journal.
+        fs::rename(self.path("journal.next"), self.path("journal"))
+    }
     // Failure points model process interruption; not an actual power failure.
     fn install(&self, failure: Option<u8>, after_preflight: impl FnOnce(&Path)) -> io::Result<()> {
         self.preflight()?;
         after_preflight(&self.root);
-        let binary = self.create("binary.tmp", BINARY)?;
-        let record = self.create("registry.tmp", RECORD)?;
-        if failure == Some(3) {
+        if failure == Some(10) {
             return Err(io::Error::other("injected before journal"));
         }
-        let journal = Journal {
-            binary_dev: binary.dev(),
-            binary_ino: binary.ino(),
-            record_dev: record.dev(),
-            record_ino: record.ino(),
+        let mut journal = Journal {
+            phase: Phase::Prepared,
+            binary: None,
+            record: None,
         };
         self.create("journal", &serde_json::to_vec(&journal)?)?;
+        if failure == Some(4) {
+            return Err(io::Error::other("injected prepared"));
+        }
+        let binary = self.create("binary.tmp", BINARY)?;
+        if failure == Some(5) {
+            return Err(io::Error::other("injected unrecorded binary"));
+        }
+        journal.binary = Some(Identity {
+            dev: binary.dev(),
+            ino: binary.ino(),
+        });
+        journal.phase = Phase::BinaryStaged;
+        self.update_journal(&journal, failure == Some(9))?;
+        if failure == Some(6) {
+            return Err(io::Error::other("injected binary staged"));
+        }
+        let record = self.create("registry.tmp", RECORD)?;
+        if failure == Some(3) {
+            return Err(io::Error::other("injected unrecorded registry"));
+        }
+        journal.record = Some(Identity {
+            dev: record.dev(),
+            ino: record.ino(),
+        });
+        journal.phase = Phase::BothStaged;
+        self.update_journal(&journal, false)?;
         if failure == Some(0) {
-            return Err(io::Error::other("injected"));
+            return Err(io::Error::other("injected staged"));
         }
         self.publish("binary.tmp", "binary")?;
         if failure == Some(1) {
-            return Err(io::Error::other("injected"));
+            return Err(io::Error::other("injected binary published"));
+        }
+        journal.phase = Phase::BinaryPublished;
+        self.update_journal(&journal, false)?;
+        if failure == Some(7) {
+            return Err(io::Error::other("injected binary recorded"));
         }
         self.publish("registry.tmp", "registry")?;
         if failure == Some(2) {
-            return Err(io::Error::other("injected"));
+            return Err(io::Error::other("injected registry published"));
+        }
+        journal.phase = Phase::BothPublished;
+        self.update_journal(&journal, false)?;
+        if failure == Some(8) {
+            return Err(io::Error::other("injected complete"));
         }
         Ok(())
     }
@@ -148,9 +203,10 @@ impl Fixture {
             || m.nlink() != 1
             || m.dev() != dev
             || m.ino() != ino
+            || m.len() != content.len() as u64
             || fs::read(path)? != content
         {
-            return Err(io::Error::other("ambiguous fixture state"));
+            return Err(io::Error::other("intervención manual: archivo ambiguo"));
         }
         Ok(true)
     }
@@ -158,31 +214,64 @@ impl Fixture {
         let journal_path = self.path("journal");
         if let Ok(metadata) = fs::symlink_metadata(&journal_path) {
             if !metadata.is_file() || metadata.nlink() != 1 || metadata.len() > 1024 {
-                return Err(io::Error::other("invalid journal"));
+                return Err(io::Error::other("intervención manual: journal inválido"));
             }
         }
         let j = match fs::read(&journal_path) {
-            Ok(bytes) => serde_json::from_slice::<Journal>(&bytes)?,
+            Ok(bytes) => serde_json::from_slice::<Journal>(&bytes)
+                .map_err(|_| io::Error::other("intervención manual: journal inválido"))?,
             Err(e) if e.kind() == io::ErrorKind::NotFound => {
-                if ["binary", "registry", "binary.tmp", "registry.tmp"]
-                    .iter()
-                    .any(|name| self.exists(name).unwrap_or(true))
+                if [
+                    "binary",
+                    "registry",
+                    "binary.tmp",
+                    "registry.tmp",
+                    "journal.next",
+                ]
+                .iter()
+                .any(|name| self.exists(name).unwrap_or(true))
                 {
-                    return Err(io::Error::other("missing journal"));
+                    return Err(io::Error::other("intervención manual: falta journal"));
                 }
                 return Ok(());
             }
             Err(e) => return Err(e),
         };
+        if self.exists("journal.next")? {
+            return Err(io::Error::other("intervención manual: journal temporal"));
+        }
+        let valid = match j.phase {
+            Phase::Prepared => j.binary.is_none() && j.record.is_none(),
+            Phase::BinaryStaged => j.binary.is_some() && j.record.is_none(),
+            Phase::BothStaged | Phase::BinaryPublished | Phase::BothPublished => {
+                j.binary.is_some() && j.record.is_some()
+            }
+        };
+        if !valid {
+            return Err(io::Error::other(
+                "intervención manual: journal inconsistente",
+            ));
+        }
         let mut owned = Vec::new();
-        for (name, dev, ino, content) in [
-            ("binary", j.binary_dev, j.binary_ino, BINARY),
-            ("binary.tmp", j.binary_dev, j.binary_ino, BINARY),
-            ("registry", j.record_dev, j.record_ino, RECORD),
-            ("registry.tmp", j.record_dev, j.record_ino, RECORD),
+        for (names, identity, content) in [
+            (["binary", "binary.tmp"], j.binary, BINARY),
+            (["registry", "registry.tmp"], j.record, RECORD),
         ] {
-            if self.check_owned(name, dev, ino, content)? {
-                owned.push(name);
+            for name in names {
+                match identity {
+                    Some(id) => {
+                        if self.check_owned(name, id.dev, id.ino, content)? {
+                            owned.push(name);
+                        }
+                    }
+                    None => {
+                        if self.exists(name)? {
+                            return Err(io::Error::other(
+                                "intervención manual: identidad desconocida",
+                            ));
+                        }
+                    }
+                }
             }
         }
         for name in owned {
@@ -218,7 +307,7 @@ fn fixture_publication_and_recovery() {
 
 #[test]
 fn interrupted_steps_are_recovered_idempotently() {
-    for step in 0..=2 {
+    for step in [0, 1, 2, 4, 6, 7, 8, 10] {
         let fixture = Fixture::new();
         assert!(fixture.install(Some(step), |_| {}).is_err());
         // Reconstruct from the persisted fixture root, without in-memory transaction state.
@@ -233,6 +322,7 @@ fn interrupted_steps_are_recovered_idempotently() {
             "binary.tmp",
             "registry.tmp",
             "journal",
+            "journal.next",
         ] {
             assert!(!fixture.exists(name).unwrap());
         }
@@ -294,10 +384,69 @@ fn preflight_rejects_directory_and_dangling_symlink() {
 }
 
 #[test]
-fn failure_before_journal_preserves_ambiguous_files() {
+fn failure_before_registry_identity_preserves_ambiguous_files() {
     let fixture = Fixture::new();
     assert!(fixture.install(Some(3), |_| {}).is_err());
+    assert!(fixture.exists("journal").unwrap());
     assert!(fixture.recover().is_err());
     assert_eq!(fs::read(fixture.path("binary.tmp")).unwrap(), BINARY);
     assert_eq!(fs::read(fixture.path("registry.tmp")).unwrap(), RECORD);
+}
+
+#[test]
+fn unrecorded_files_require_manual_intervention_and_are_preserved() {
+    for (step, filename, bytes) in [(5, "binary.tmp", BINARY), (3, "registry.tmp", RECORD)] {
+        let fixture = Fixture::new();
+        assert!(fixture.install(Some(step), |_| {}).is_err());
+        let error = fixture.recover().unwrap_err();
+        assert!(error.to_string().contains("intervención manual"));
+        assert_eq!(fs::read(fixture.path(filename)).unwrap(), bytes);
+        assert!(fixture.exists("journal").unwrap());
+        assert!(fixture
+            .recover()
+            .unwrap_err()
+            .to_string()
+            .contains("intervención manual"));
+    }
+}
+
+#[test]
+fn foreign_pending_journal_is_never_removed() {
+    let fixture = Fixture::new();
+    assert!(fixture.install(Some(6), |_| {}).is_err());
+    fs::write(fixture.path("journal.next"), b"foreign").unwrap();
+    assert!(fixture
+        .recover()
+        .unwrap_err()
+        .to_string()
+        .contains("intervención manual"));
+    assert_eq!(fs::read(fixture.path("journal.next")).unwrap(), b"foreign");
+    assert_eq!(fs::read(fixture.path("binary.tmp")).unwrap(), BINARY);
+}
+
+#[test]
+fn interrupted_journal_update_requires_manual_intervention() {
+    let fixture = Fixture::new();
+    assert!(fixture.install(Some(9), |_| {}).is_err());
+    assert!(fixture
+        .recover()
+        .unwrap_err()
+        .to_string()
+        .contains("intervención manual"));
+    assert_eq!(fs::read(fixture.path("binary.tmp")).unwrap(), BINARY);
+    assert!(fixture.exists("journal.next").unwrap());
+}
+
+#[test]
+fn malformed_journal_preserves_everything() {
+    let fixture = Fixture::new();
+    assert!(fixture.install(Some(6), |_| {}).is_err());
+    fs::write(fixture.path("journal"), b"partial").unwrap();
+    assert!(fixture
+        .recover()
+        .unwrap_err()
+        .to_string()
+        .contains("intervención manual"));
+    assert_eq!(fs::read(fixture.path("binary.tmp")).unwrap(), BINARY);
+    assert_eq!(fs::read(fixture.path("journal")).unwrap(), b"partial");
 }
