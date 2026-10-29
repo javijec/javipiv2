@@ -1,3 +1,4 @@
+pub mod agents;
 pub mod backups;
 pub mod docker;
 pub mod health;

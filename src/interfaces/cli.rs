@@ -2,7 +2,9 @@
 
 use crate::core::catalog::{all_modules, profile_modules};
 use crate::core::minimal_simulation::MinimalSimulation;
-use crate::modules::{backups, docker, health, preflight, projects, services, storage, updates};
+use crate::modules::{
+    agents, backups, docker, health, preflight, projects, services, storage, updates,
+};
 use std::ffi::OsString;
 use std::io::Read;
 
@@ -24,6 +26,7 @@ fn help() {
     println!("  backup inspect --stdin  Observar snapshots JSON suministrados por stdin");
     println!("  storage status         Montajes relevantes (observación pasiva)");
     println!("  updates check          Comparar componentes con upstream (requiere red)");
+    println!("  agents status          Observar metadatos locales de agentes (sin red)");
     println!("  docker status          Consultar daemon Docker local");
     println!("  docker list            Listar contenedores locales");
     println!("  docker inspect <nombre>  Información básica de un contenedor");
@@ -177,6 +180,11 @@ pub fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), String> {
             println!("Resultado del último intento: desconocido");
         }
         ["updates", "check"] => println!("{}", format_updates(&updates::check())),
+        ["agents", "status"] => {
+            for observation in agents::status() {
+                println!("{}", observation.line());
+            }
+        }
         ["storage", "status"] => {
             let (status, capacity) = storage::read_capacity().unwrap_or_default();
             println!(
