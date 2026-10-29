@@ -1,4 +1,50 @@
+use agents::Probe;
 use javipiv2::modules::agents;
+
+#[test]
+fn executable_evidence_is_fixed_conservative_and_independent_of_version() {
+    let mut paths = Vec::new();
+    let result = agents::status_with_probes(
+        |_| Some(br#"{"version":"1.2.3"}"#.to_vec()),
+        |path| {
+            paths.push(path.to_owned());
+            if path == "/usr/bin/pi" || path == "/usr/local/bin/engram" {
+                Probe::Executable
+            } else {
+                Probe::Absent
+            }
+        },
+    );
+    assert_eq!(paths.len(), 12);
+    assert_eq!(result[0].line(), "Pi Agent: ejecutable=/usr/bin/pi (archivo regular con bits de ejecución; acceso no garantizado), versión npm=1.2.3 (no vinculada al ejecutable), estado=desconocido");
+    assert!(result[3]
+        .line()
+        .contains("ejecutable=/usr/local/bin/engram"));
+    assert!(result[3].line().contains("versión npm=desconocido"));
+}
+
+#[test]
+fn unsafe_and_conflicting_probes_stay_unknown() {
+    for problem in [Probe::Unknown, Probe::Executable] {
+        let result = agents::status_with_probes(
+            |_| None,
+            |path| {
+                if path == "/usr/bin/codex" {
+                    Probe::Executable
+                } else if path == "/usr/local/bin/codex" {
+                    problem
+                } else {
+                    Probe::Absent
+                }
+            },
+        );
+        assert!(result[2].line().contains("ejecutable=desconocido"));
+    }
+    let result = agents::status_with_probes(|_| None, |_| Probe::Unknown);
+    assert!(result
+        .iter()
+        .all(|o| o.line().contains("ejecutable=desconocido")));
+}
 
 #[test]
 fn synthetic_metadata_is_not_executable_or_runtime_evidence() {
@@ -18,11 +64,11 @@ fn synthetic_metadata_is_not_executable_or_runtime_evidence() {
     );
     assert_eq!(
         observations[1].line(),
-        "Gentle Shell: disponibilidad=desconocido, versión=1.2.3, estado=desconocido"
+        "Gentle Shell: ejecutable=desconocido, versión npm=1.2.3 (no vinculada al ejecutable), estado=desconocido"
     );
     assert_eq!(
         observations[3].line(),
-        "Engram: disponibilidad=desconocido, versión=desconocido, estado=desconocido"
+        "Engram: ejecutable=desconocido, versión npm=desconocido (no vinculada al ejecutable), estado=desconocido"
     );
 }
 

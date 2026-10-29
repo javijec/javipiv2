@@ -26,7 +26,7 @@ fn help() {
     println!("  backup inspect --stdin  Observar snapshots JSON suministrados por stdin");
     println!("  storage status         Montajes relevantes (observación pasiva)");
     println!("  updates check          Comparar componentes con upstream (requiere red)");
-    println!("  agents status          Observar metadatos locales de agentes (sin red)");
+    println!("  agents status          Observar ejecutables y versiones npm locales (sin red)");
     println!("  docker status          Consultar daemon Docker local");
     println!("  docker list            Listar contenedores locales");
     println!("  docker inspect <nombre>  Información básica de un contenedor");

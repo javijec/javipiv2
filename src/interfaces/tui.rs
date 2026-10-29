@@ -566,7 +566,7 @@ mod tests {
         }
         assert!(app.worker.is_none());
         assert!(app.text().contains(
-            "Engram: disponibilidad=desconocido, versión=desconocido, estado=desconocido"
+            "Engram: ejecutable=desconocido, versión npm=desconocido (no vinculada al ejecutable), estado=desconocido"
         ));
         app.key(KeyCode::Tab);
         app.key(KeyCode::Enter);
