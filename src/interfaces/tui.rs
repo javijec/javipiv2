@@ -1,6 +1,7 @@
 //! Interfaz de observación; las consultas se ejecutan fuera del hilo de entrada.
 use crate::modules::{
-    agents, developer, docker, health, projects, remote, services, storage, updates, watchdog,
+    agents, clean, developer, docker, health, projects, remote, services, storage, updates,
+    watchdog,
 };
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind},
@@ -21,7 +22,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-const NAMES: [&str; 11] = [
+const NAMES: [&str; 12] = [
     "Health",
     "Services",
     "Docker",
@@ -33,12 +34,14 @@ const NAMES: [&str; 11] = [
     "Watchdog",
     "Developer",
     "Overview",
+    "Clean",
 ];
 const LIMIT: Duration = Duration::from_secs(10);
 
 #[derive(Debug)]
 enum Data {
     Health(String, bool),
+    Clean(Option<storage::Capacity>),
     Watchdog(watchdog::Assessment),
     Services(Vec<services::Service>),
     Docker(Vec<docker::Container>),
@@ -58,6 +61,7 @@ impl Data {
         };
         match self {
             Self::Health(_, succeeded) => *succeeded,
+            Self::Clean(capacity) => capacity.is_some(),
             Self::Remote(v) => v.iter().any(remote::Observation::has_evidence),
             Self::Watchdog(a) => *a != watchdog::Assessment::Unknown,
             Self::Services(v) => v
@@ -76,7 +80,7 @@ impl Data {
     }
     fn len(&self) -> usize {
         match self {
-            Self::Health(_, _) | Self::Watchdog(_) => 0,
+            Self::Health(_, _) | Self::Watchdog(_) | Self::Clean(_) => 0,
             Self::Storage(_, _) => 1,
             Self::Services(v) => v.len(),
             Self::Docker(v) => v.len(),
@@ -95,7 +99,7 @@ impl Data {
                 .to_owned()
         };
         match self {
-            Self::Health(_, _) | Self::Watchdog(_) => None,
+            Self::Health(_, _) | Self::Watchdog(_) | Self::Clean(_) => None,
             Self::Updates(v) => v.get(index).map(updates::Observation::line),
             Self::Agents(v) => v.get(index).map(agents::Observation::line),
             Self::Remote(v) => v.get(index).map(remote::Observation::line),
@@ -175,6 +179,7 @@ fn query_error(view: usize) -> &'static str {
         7 => "Error al consultar Remote; datos anteriores",
         8 => "Error al consultar Watchdog; datos anteriores",
         9 => "Error al consultar Developer; datos anteriores",
+        11 => "Error al consultar Clean; datos anteriores",
         _ => "Error al consultar vista; datos anteriores",
     }
 }
@@ -187,18 +192,18 @@ struct Worker {
 struct App {
     selected: usize,
     view: usize,
-    content: [String; 11],
-    data: [Option<Data>; 11],
-    status: [Option<String>; 11],
-    failed: [bool; 11],
-    last_error: [Option<String>; 11],
+    content: [String; 12],
+    data: [Option<Data>; 12],
+    status: [Option<String>; 12],
+    failed: [bool; 12],
+    last_error: [Option<String>; 12],
     worker: Option<Worker>,
     notice: Option<String>,
     row: usize,
     column: usize,
     list_row: usize,
     list_column: usize,
-    item: [usize; 11],
+    item: [usize; 12],
     table_focus: bool,
     detail: bool,
     height: usize,
@@ -213,7 +218,7 @@ impl App {
             }),
             data: std::array::from_fn(|_| None),
             status: std::array::from_fn(|_| None),
-            failed: [false; 11],
+            failed: [false; 12],
             last_error: std::array::from_fn(|_| None),
             worker: None,
             notice: None,
@@ -221,7 +226,7 @@ impl App {
             column: 0,
             list_row: 0,
             list_column: 0,
-            item: [0; 11],
+            item: [0; 12],
             table_focus: false,
             detail: false,
             height: 0,
@@ -230,7 +235,7 @@ impl App {
     fn text(&self) -> String {
         if self.view == 10 {
             let mut text = String::from("Solo resultados almacenados; disponible indica evidencia, no instalación ni salud. Remote no demuestra conectividad. R no consulta.\n");
-            for (i, name) in NAMES[..10].iter().enumerate() {
+            for (i, name) in NAMES.iter().enumerate().filter(|(i, _)| *i != 10) {
                 let state = if self.failed[i] {
                     "error"
                 } else {
@@ -255,6 +260,7 @@ impl App {
         let mut text = match &self.data[self.view] {
             None => self.content[self.view].clone(),
             Some(Data::Health(text, _)) => text.clone(),
+            Some(Data::Clean(capacity)) => clean::format_observation(*capacity),
             Some(Data::Watchdog(assessment)) => assessment.line(),
             Some(data) if self.detail => data
                 .line(self.item[self.view], true)
@@ -536,6 +542,7 @@ fn query(view: usize) -> Answer {
         7 => Ok(Data::Remote(remote::status())),
         8 => Ok(Data::Watchdog(watchdog::status("20"))),
         9 => Ok(Data::Developer(agents::status())),
+        11 => Ok(Data::Clean(clean::observe())),
         _ => Err("vista desconocida".into()),
     }
 }
@@ -642,6 +649,26 @@ pub fn run() -> Result<(), String> {
 mod tests {
     use super::*;
     #[test]
+    fn clean_view_requires_manual_request() {
+        fn fake(view: usize) -> Answer {
+            assert_eq!(view, 11);
+            Ok(Data::Clean(None))
+        }
+        let mut app = App::new();
+        app.selected = 11;
+        app.key_with(KeyCode::Enter, fake);
+        assert_eq!(app.view, 11);
+        assert!(app.worker.is_none());
+        app.key_with(KeyCode::Char('R'), fake);
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while app.worker.is_some() && Instant::now() < deadline {
+            app.update();
+            thread::yield_now();
+        }
+        assert!(app.worker.is_none());
+        assert!(app.text().contains("Raíz (/): desconocido"));
+    }
+    #[test]
     fn menu_selection_stays_visible_in_small_terminals() {
         use ratatui::backend::TestBackend;
         let mut app = App::new();
@@ -665,9 +692,12 @@ mod tests {
             app.selected = 0;
             check(&mut terminal, &app, "> Health");
             app.key(KeyCode::Up);
+            check(&mut terminal, &app, "> Clean");
+            app.key(KeyCode::Up);
             check(&mut terminal, &app, "> Overview");
             app.key(KeyCode::Up);
             check(&mut terminal, &app, "> Developer");
+            app.key(KeyCode::Down);
             app.key(KeyCode::Down);
             app.key(KeyCode::Down);
             check(&mut terminal, &app, "> Health");
@@ -965,6 +995,9 @@ mod tests {
         app.key(KeyCode::Down);
         app.key(KeyCode::Enter);
         assert_eq!(app.view, 10);
+        app.key(KeyCode::Down);
+        app.key(KeyCode::Enter);
+        assert_eq!(app.view, 11);
         app.key(KeyCode::Down);
         app.key(KeyCode::Enter);
         assert_eq!(app.view, 0);

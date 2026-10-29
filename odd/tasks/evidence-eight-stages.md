@@ -15,14 +15,15 @@ S9. "Sin sudo, push, merge ni GitHub Actions." "No modificar JaviPi original." "
 ## Tasks
 - T1 [S1,S9] done: 21-area review, 4 catalog tests, operator manual validation recorded; commit: d616437
 - T2 [S2,S9] done: typed cached evidence, 26 TUI and 7 Remote tests passed; commit: 608ea2b
-- T3 [S3,S9] in progress: inspect TUI for concrete defects; commit: pending
-- T4 [S4,S9] public source investigation and safe deploy inventory if possible; commit: pending
-- T5 [S5,S9] notifications research and safe observation if possible; commit: pending
-- T6 [S6,S9] cleanup research and passive diagnostic if possible; commit: pending
+- T3 [S3,S9] done: short-terminal menu selection visibility, 27 TUI tests; commit: 8ead82e
+- T4 [S4,S9] done: original GitHub Deploy documented; no safe source without /srv or protected registry; implementation omitted
+- T5 [S5,S9] done: original GitHub Notifications documented; state under /srv, no safe local source; implementation omitted
+- T6 [S6,S9] in progress: passive root filesystem capacity diagnostic using Storage arithmetic; commit: pending
 - T7 [S7,S9] integration and consistency; commit: pending
 - T8 [S8,S9] ARM64 final checks and Engram; commit: pending
 
 ## Log
+L2. GitHub original docs/DEPLOY-MANAGER.md: four Compose names in /srv/workspaces, registry /etc/javipi/deployments.json. docs/SMART-NOTIFICATIONS.md: incidents in /srv/javipi/state/notifications.json. No authorized safe runtime source, so implementations omitted. docs/CLEANUP.md: status includes disk usage, caches and Docker; implement only root filesystem capacity as passive diagnostic, never inspect protected paths or cleanup candidates.
 L1. # JaviPiV2 — Bloque autónomo de desarrollo (8 etapas)
 
 El operador confirmó la revisión manual satisfactoria de las nuevas vistas TUI. Continuá autónomamente durante estas 8 etapas, sin solicitar confirmación entre tareas seguras.

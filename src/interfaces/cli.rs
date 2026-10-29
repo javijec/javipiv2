@@ -3,8 +3,8 @@
 use crate::core::catalog::{all_modules, profile_modules};
 use crate::core::minimal_simulation::MinimalSimulation;
 use crate::modules::{
-    agents, backups, developer, docker, health, preflight, projects, remote, services, storage,
-    updates, watchdog,
+    agents, backups, clean, developer, docker, health, preflight, projects, remote, services,
+    storage, updates, watchdog,
 };
 use std::ffi::OsString;
 use std::io::Read;
@@ -33,6 +33,7 @@ fn help() {
     println!("  watchdog status <minimum-percent>  Consultar memoria Health, sin monitoreo");
     println!("  agents status          Observar ejecutables y versiones npm locales (sin red)");
     println!("  remote status          Observar unidades y TCP local sin atribución (sin red)");
+    println!("  clean status           Consultar capacidad de la raíz sin limpiar");
     println!("  docker status          Consultar daemon Docker local");
     println!("  docker list            Listar contenedores locales");
     println!("  docker inspect <nombre>  Información básica de un contenedor");
@@ -213,6 +214,7 @@ pub fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), String> {
             println!("Valores suministrados por el usuario; no son monitoreo real.");
             println!("Resultado: {result}");
         }
+        ["clean", "status"] => println!("{}", clean::status()),
         ["remote", "status"] => {
             println!("Estado de servicios locales; no demuestra conectividad.");
             for observation in remote::status() {
