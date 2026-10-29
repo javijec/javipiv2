@@ -46,6 +46,7 @@ fn remote_queries_only_known_units_and_reports_independent_states() {
         })
     });
     assert_eq!(calls, ["ssh.service", "tailscaled.service"]);
+    assert!(observations.iter().all(|o| o.has_evidence()));
     assert_eq!(
         observations[0].line(),
         "SSH (ssh.service): carga=loaded, actividad=desconocido"
@@ -59,6 +60,7 @@ fn remote_queries_only_known_units_and_reports_independent_states() {
 #[test]
 fn remote_errors_are_unknown_and_not_exposed() {
     let observations = remote::status_with(|_| Err("secret error".into()));
+    assert!(observations.iter().all(|o| !o.has_evidence()));
     assert_eq!(
         observations[0].line(),
         "SSH (ssh.service): carga=desconocido, actividad=desconocido"
@@ -75,6 +77,7 @@ const V6: &str = "   0: 00000000000000000000000001000000:ABCD 000000000000000000
 
 fn check_output(v4: Result<&[u8], ()>, v6: Result<&[u8], ()>, expected: &str) {
     let observations = remote::status_with_tcp(|_| Err("private error".into()), v4, v6);
+    assert_eq!(observations[2].has_evidence(), expected != "desconocido");
     let output = observations
         .iter()
         .map(|o| o.line())

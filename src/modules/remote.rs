@@ -73,14 +73,18 @@ fn parse_tcp(data: &[u8], address_len: usize) -> Option<bool> {
     Some(listen)
 }
 
-pub fn tcp_line_with(v4: Result<&[u8], ()>, v6: Result<&[u8], ()>) -> String {
-    let evidence = v4
+fn tcp_evidence(v4: Result<&[u8], ()>, v6: Result<&[u8], ()>) -> Option<bool> {
+    let (v4, v6) = v4
         .ok()
         .and_then(|data| parse_tcp(data, 8))
-        .zip(v6.ok().and_then(|data| parse_tcp(data, 32)));
-    let value = match evidence {
-        Some((true, _)) | Some((_, true)) => "sí",
-        Some((false, false)) => "no",
+        .zip(v6.ok().and_then(|data| parse_tcp(data, 32)))?;
+    Some(v4 || v6)
+}
+
+pub fn tcp_line_with(v4: Result<&[u8], ()>, v6: Result<&[u8], ()>) -> String {
+    let value = match tcp_evidence(v4, v6) {
+        Some(true) => "sí",
+        Some(false) => "no",
         None => "desconocido",
     };
     format!("TCP en escucha (sin atribución): {value}; SSH en escucha=desconocido; conectividad SSH=desconocido; conectividad Tailscale=desconocido")
@@ -109,9 +113,19 @@ pub struct Observation {
     load: Option<String>,
     active: Option<String>,
     extra: Option<String>,
+    tcp: Option<bool>,
 }
 
 impl Observation {
+    pub fn has_evidence(&self) -> bool {
+        let known = |value: &Option<String>| {
+            value
+                .as_deref()
+                .is_some_and(|s| !s.is_empty() && s != "-" && s != "desconocido")
+        };
+        known(&self.load) || known(&self.active) || self.tcp.is_some()
+    }
+
     pub fn line(&self) -> String {
         if let Some(extra) = &self.extra {
             return extra.clone();
@@ -137,6 +151,7 @@ pub fn status_with(
                 name,
                 unit,
                 extra: None,
+                tcp: None,
                 load: result
                     .as_ref()
                     .and_then(|s| s.load.clone())
@@ -161,18 +176,24 @@ pub fn status_with_tcp(
         load: None,
         active: None,
         extra: Some(tcp_line_with(v4, v6)),
+        tcp: tcp_evidence(v4, v6),
     });
     observations
 }
 
 pub fn status() -> Vec<Observation> {
     let mut observations = status_with(services::status);
+    let v4 = read_tcp("/proc/net/tcp");
+    let v6 = read_tcp("/proc/net/tcp6");
+    let v4 = v4.as_deref().map_err(|_| ());
+    let v6 = v6.as_deref().map_err(|_| ());
     observations.push(Observation {
         name: "",
         unit: "",
         load: None,
         active: None,
-        extra: Some(tcp_line()),
+        extra: Some(tcp_line_with(v4, v6)),
+        tcp: tcp_evidence(v4, v6),
     });
     observations
 }

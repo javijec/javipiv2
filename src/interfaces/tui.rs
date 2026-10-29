@@ -38,7 +38,7 @@ const LIMIT: Duration = Duration::from_secs(10);
 
 #[derive(Debug)]
 enum Data {
-    Health(String),
+    Health(String, bool),
     Watchdog(watchdog::Assessment),
     Services(Vec<services::Service>),
     Docker(Vec<docker::Container>),
@@ -57,7 +57,8 @@ impl Data {
                 .is_some_and(|s| !s.is_empty() && s != "-" && s != "desconocido")
         };
         match self {
-            Self::Health(_) | Self::Remote(_) => false,
+            Self::Health(_, succeeded) => *succeeded,
+            Self::Remote(v) => v.iter().any(remote::Observation::has_evidence),
             Self::Watchdog(a) => *a != watchdog::Assessment::Unknown,
             Self::Services(v) => v
                 .iter()
@@ -75,7 +76,7 @@ impl Data {
     }
     fn len(&self) -> usize {
         match self {
-            Self::Health(_) | Self::Watchdog(_) => 0,
+            Self::Health(_, _) | Self::Watchdog(_) => 0,
             Self::Storage(_, _) => 1,
             Self::Services(v) => v.len(),
             Self::Docker(v) => v.len(),
@@ -94,7 +95,7 @@ impl Data {
                 .to_owned()
         };
         match self {
-            Self::Health(_) | Self::Watchdog(_) => None,
+            Self::Health(_, _) | Self::Watchdog(_) => None,
             Self::Updates(v) => v.get(index).map(updates::Observation::line),
             Self::Agents(v) => v.get(index).map(agents::Observation::line),
             Self::Remote(v) => v.get(index).map(remote::Observation::line),
@@ -253,7 +254,7 @@ impl App {
         }
         let mut text = match &self.data[self.view] {
             None => self.content[self.view].clone(),
-            Some(Data::Health(text)) => text.clone(),
+            Some(Data::Health(text, _)) => text.clone(),
             Some(Data::Watchdog(assessment)) => assessment.line(),
             Some(data) if self.detail => data
                 .line(self.item[self.view], true)
@@ -297,7 +298,7 @@ impl App {
         let table = !self.detail
             && self.data[self.view]
                 .as_ref()
-                .is_some_and(|d| !matches!(d, Data::Health(_)) && d.len() > 0);
+                .is_some_and(|d| !matches!(d, Data::Health(_, _)) && d.len() > 0);
         let rows = self.data[self.view].as_ref().map_or(0, Data::len);
         let max_column = text
             .lines()
@@ -327,7 +328,7 @@ impl App {
         let table = !self.detail
             && self.data[self.view]
                 .as_ref()
-                .is_some_and(|d| !matches!(d, Data::Health(_)) && d.len() > 0);
+                .is_some_and(|d| !matches!(d, Data::Health(_, _)) && d.len() > 0);
         self.text()
             .lines()
             .enumerate()
@@ -518,7 +519,7 @@ fn query(view: usize) -> Answer {
                 .cpu_temperature_millicelsius
                 .map(|v| format!("{:.3} °C", v as f64 / 1000.0))
                 .unwrap_or_else(|| "desconocida".into());
-            Ok(Data::Health(format!("Host: {}\nUptime: {} h {} min\nRAM disponible: {} / {} MiB\nCarga (1, 5, 15 min): {}\nTemperatura: {}", status.hostname, status.uptime_seconds / 3600, status.uptime_seconds / 60 % 60, status.memory_available_kib / 1024, status.memory_total_kib / 1024, load, temperature)))
+            Ok(Data::Health(format!("Host: {}\nUptime: {} h {} min\nRAM disponible: {} / {} MiB\nCarga (1, 5, 15 min): {}\nTemperatura: {}", status.hostname, status.uptime_seconds / 3600, status.uptime_seconds / 60 % 60, status.memory_available_kib / 1024, status.memory_total_kib / 1024, load, temperature), true))
         }
         1 => services::list().map(Data::Services),
         2 => docker::list().map(Data::Docker),
@@ -700,7 +701,7 @@ mod tests {
             comparison: updates::Comparison::Unknown,
         };
         let unknown = vec![
-            Data::Health(String::new()),
+            Data::Health(String::new(), false),
             Data::Services(vec![service("a")]),
             Data::Docker(vec![]),
             Data::Projects(vec![]),
@@ -712,7 +713,7 @@ mod tests {
             Data::Developer(vec![observation(None, None)]),
         ];
         let present = vec![
-            Data::Health("synthetic health".into()),
+            Data::Health("synthetic health".into(), true),
             Data::Services(vec![services::Service {
                 name: "a".into(),
                 load: Some("not-found".into()),
@@ -765,11 +766,7 @@ mod tests {
         }
         for (i, data) in present.into_iter().enumerate() {
             app.data[i] = Some(data);
-            let expected = if i == 0 || i == 7 {
-                "desconocido"
-            } else {
-                "disponible"
-            };
+            let expected = "disponible";
             assert!(app.text().contains(&format!("{}: {expected}", NAMES[i])));
             let before = format!("{:?}", app.data[i]);
             let (sender, receiver) = mpsc::channel();

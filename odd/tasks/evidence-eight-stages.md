@@ -13,8 +13,8 @@ S8. "ejecutar pruebas ARM64, formato, check, Clippy estricto y build. Actualizar
 S9. "Sin sudo, push, merge ni GitHub Actions." "No modificar JaviPi original." "No instalar ni actualizar software." "No modificar servicios, contenedores, montajes o datos productivos." "No ejecutar backups, restauraciones, despliegues ni limpiezas." "No acceder a rutas protegidas ni credenciales." "No asumir nuevos riesgos de autofs bajo `/srv`." "Conservar los cambios y archivos ajenos." "No implementar acciones administrativas reales."
 
 ## Tasks
-- T1 [S1,S9] consolidation; commit: pending
-- T2 [S2,S9] Overview evidence; commit: pending
+- T1 [S1,S9] done: 21-area review, 4 catalog tests, operator manual validation recorded; commit: d616437
+- T2 [S2,S9] in progress: typed cached Overview evidence; commit: pending
 - T3 [S3,S9] TUI concrete defects; commit: pending
 - T4 [S4,S9] public source investigation and safe deploy inventory if possible; commit: pending
 - T5 [S5,S9] notifications research and safe observation if possible; commit: pending
