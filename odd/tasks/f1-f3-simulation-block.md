@@ -19,10 +19,11 @@ S9. "No ejecutar instalaciones ni acciones administrativas reales, modificar Jav
 - T4 [S4,S9] done: isolated in-memory sandbox, 3 tests and Clippy passed; commit: 5851ccf
 - T5 [S5,S9] done: bounded checkpoint validation and replay, 5 tests and Clippy; commit: 085932d
 - T6 [S6,S9] done: empty immutable declarative registry, 9 tests and Clippy passed; commit: 290f220
-- T7 [S7,S9] in progress: CLI/TUI planning and diagnostics; commit: pending
-- T8 [S8,S9] final ARM64 and documentation; commit: pending
+- T7 [S7,S9] done: simulated CLI/TUI planning, 4 CLI and 29 TUI tests; commit: 0999aa7
+- T8 [S8,S9] done: ARM64 suite 152 passed, 1 ignored; fmt/check/Clippy/build passed; commit: closing documentation
 
 ## Log
+L3. ARM64 final suite: 152 passed, 0 failed, 1 ignored; fmt/check/strict Clippy/build passed. Eight catalog CLI differential cases matched. The sandbox is virtual in memory, not an OS security boundary; checkpoints are bytes without crash durability; installation actions remain undefined and blocked, and no owned unit has been established. Planning TUI was tested synthetically, not interactively. Initial build comparison failed due to shared Cargo target collision, then passed with isolated targets.
 L2. Existing catalog validates references and profile order but not whole-graph cycles; preflight is not installed-state evidence. F1 simulation and versioned checkpoints exist, but plans lack action identity and sandbox. Legacy checkpoint file API follows arbitrary paths and is not safe for untrusted inputs. F3 allowlist only authorizes planning and execution remains disabled; service ownership is not verified. Real installation/recovery requires separate authority and environment, and is outside this block.
 L1. JaviPiV2 — Iniciá un bloque autónomo de 8 etapas centrado en F1 y F3.
 
