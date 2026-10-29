@@ -17,12 +17,14 @@ S9. "No sudo ni cambios de privilegios." "No modificar JaviPi original ni servic
 - T2 [S2,S9] done: 5 focused tests and CLI Health query passed; commit: bb37069
 - T3 [S3,S9] done: 22 synthetic TUI tests, formatting and Clippy passed; commit: 9d1cc4a
 - T4 [S4,S9] done: local CLI, 2 focused tests, 23 TUI tests, Clippy and build; commit: 0d5aba6
-- T5 [S5,S9] in progress: TUI overview without automatic queries; commit: pending
-- T6 [S6,S9] route: read-only investigation or omit; commit: pending
-- T7 [S7,S9] route: choose safe real observation or omit; commit: pending
-- T8 [S8,S9] route: integration and final ARM64; commit: pending
+- T5 [S5,S9] done: passive cached Overview, 26 TUI tests and Clippy passed; commit: ec47ba2
+- T6 [S6,S9] omitted: original and target paths under /srv pose prohibited autofs race; no verified public source; commit: final documentation
+- T7 [S7,S9] omitted: no evidence-based additional safe observation identified without original source or new host risk; no fictitious feature; commit: final documentation
+- T8 [S8,S9] done: final ARM64 suite 131 passed, 1 ignored; fmt/check/Clippy/build passed; commit: final integration documentation
 
 ## Log
+L3. Final ARM64: 131 tests passed, 1 ignored; formatting, check, strict Clippy and build passed. New TUI views synthetic only. Engram saves succeeded, but cloud delivery is not independently confirmed. No external reviewers or repeated native assessment.
+L2. T6: Original repository and planned stacks reside under /srv; a mountinfo preflight cannot eliminate the prohibited automount race. Public searches did not identify a verifiable equivalent. No new access or Compose execution. T7: no evidence-based safe increment identified without that source; omitted rather than fabricate. Overview Health and Remote cached representations conservatively remain unknown; no automatic queries.
 L1. # JaviPiV2 — Bloque autónomo de desarrollo (8 etapas)
 
 Quiero que avances de forma autónoma por las siguientes 8 etapas, sin solicitar autorización entre tareas seguras.
