@@ -19,10 +19,11 @@ S9. "Sin sudo, push, merge ni GitHub Actions." "No modificar JaviPi original." "
 - T4 [S4,S9] done: original GitHub Deploy documented; no safe source without /srv or protected registry; implementation omitted
 - T5 [S5,S9] done: original GitHub Notifications documented; state under /srv, no safe local source; implementation omitted
 - T6 [S6,S9] done: passive root filesystem capacity, 2 focused and 28 TUI tests; commit: d5317c1
-- T7 [S7,S9] done: Clean/Overview cached integration tested, README TUI status reconciled; commit: integration work unit
-- T8 [S8,S9] in progress: ARM64 final checks and Engram; commit: pending
+- T7 [S7,S9] done: Clean/Overview cached integration tested, README TUI status reconciled; commit: 929c2c7
+- T8 [S8,S9] done: ARM64 suite 135 passed, 1 ignored; fmt/check/Clippy/build passed, results saved in Engram; commit: closing documentation
 
 ## Log
+L3. Final ARM64 suite: 135 passed, 0 failed, 1 ignored. Formatting, check, strict Clippy, build and diff check passed. New Overview-B, menu and Clean views have synthetic coverage; manual validation of those subsequent changes is pending. Local Engram save recorded; cloud delivery is not assumed.
 L2. GitHub original docs/DEPLOY-MANAGER.md: four Compose names in /srv/workspaces, registry /etc/javipi/deployments.json. docs/SMART-NOTIFICATIONS.md: incidents in /srv/javipi/state/notifications.json. No authorized safe runtime source, so implementations omitted. docs/CLEANUP.md: status includes disk usage, caches and Docker; implement only root filesystem capacity as passive diagnostic, never inspect protected paths or cleanup candidates.
 L1. # JaviPiV2 — Bloque autónomo de desarrollo (8 etapas)
 
