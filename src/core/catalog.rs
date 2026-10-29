@@ -1,7 +1,7 @@
 //! Catálogo y perfiles declarativos del proyecto.
 //! Representar un módulo no significa que esté instalado o disponible.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 pub const MODULES: &str = include_str!("../../catalog/modules.tsv");
 pub const MINIMAL: &str = include_str!("../../profiles/minimal.list");
@@ -18,9 +18,14 @@ pub struct Module<'a> {
 }
 
 pub fn all_modules() -> Result<Vec<Module<'static>>, String> {
+    parse_catalog(MODULES)
+}
+
+/// Parses and validates an entire declarative catalog without inspecting the host.
+pub fn parse_catalog(source: &str) -> Result<Vec<Module<'_>>, String> {
     let mut ids = HashSet::new();
     let mut modules = Vec::new();
-    for (index, row) in MODULES.lines().enumerate() {
+    for (index, row) in source.lines().enumerate() {
         if row.trim().is_empty() || row.starts_with('#') {
             continue;
         }
@@ -65,6 +70,39 @@ pub fn all_modules() -> Result<Vec<Module<'static>>, String> {
                     "{} depende de un módulo desconocido: {dependency}",
                     module.id
                 ));
+            }
+        }
+    }
+    // Visit every component, including modules absent from any selected profile.
+    let indices: HashMap<_, _> = modules.iter().enumerate().map(|(i, m)| (m.id, i)).collect();
+    let mut states = vec![0u8; modules.len()];
+    for start in 0..modules.len() {
+        if states[start] != 0 {
+            continue;
+        }
+        states[start] = 1;
+        let mut stack = vec![(start, 0)];
+        while let Some((node, next)) = stack.last_mut() {
+            if *next == modules[*node].dependencies.len() {
+                states[*node] = 2;
+                stack.pop();
+                continue;
+            }
+            let dependency = modules[*node].dependencies[*next];
+            *next += 1;
+            let target = indices[dependency];
+            match states[target] {
+                1 => {
+                    return Err(format!(
+                        "ciclo de dependencias: {} -> {dependency}",
+                        modules[*node].id
+                    ))
+                }
+                0 => {
+                    states[target] = 1;
+                    stack.push((target, 0));
+                }
+                _ => {}
             }
         }
     }

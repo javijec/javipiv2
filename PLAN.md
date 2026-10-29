@@ -45,7 +45,7 @@ Las 21 áreas del catálogo en `catalog/modules.tsv` son: core, health, storage,
 - `developer`: Minimal más proyectos, toolchains, agentes, IA, acceso remoto, Engram, backup y actualización.
 - `full`: los 21 módulos, incluidas integraciones que necesiten credenciales y configuración posterior.
 
-Los archivos `profiles/*.list` son la fuente de verdad inicial para la selección; el orden incorpora las dependencias. Las dependencias e identidad de módulos se encuentran en `catalog/modules.tsv`.
+Los archivos `profiles/*.list` son la fuente de verdad inicial para la selección; el orden incorpora las dependencias. Las dependencias e identidad de módulos se encuentran en `catalog/modules.tsv`. El catálogo Rust valida referencias y ciclos en el grafo completo, también fuera de los perfiles; esto verifica declaraciones, no instalación ni presencia en el host.
 
 ## Reinstalación y recuperación: requisitos de producto
 

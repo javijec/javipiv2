@@ -114,7 +114,7 @@ bash installer/bootstrap.sh --plan developer
 
 El bootstrap **solo inspecciona y presenta perfiles**. No descarga ni instala paquetes, no escribe en `/etc`, no toca `/srv`, no prepara particiones y no usa `sudo`. La instalación automatizada está planificada para F1, no existe aún.
 
-Los perfiles están en `profiles/`, y el catálogo único de módulos está en `catalog/modules.tsv`. El mismo catálogo se compila en Rust para el CLI. Las 21 áreas cubren las funcionalidades del proyecto original, pero casi todas siguen en estado `planned`.
+Los perfiles están en `profiles/`, y el catálogo único de módulos está en `catalog/modules.tsv`. El mismo catálogo se compila en Rust para el CLI. `module list` y `plan` validan las referencias y la ausencia de ciclos en todo el catálogo, incluso fuera del perfil elegido. La biblioteca expone `core::catalog::parse_catalog` para validar datos declarativos suministrados por el llamador, sin leer archivos ni consultar el host; un inventario válido no acredita instalación. Las 21 áreas cubren las funcionalidades del proyecto original, pero casi todas siguen en estado `planned`.
 
 ## Alcance y diseño
 
