@@ -1,6 +1,6 @@
 //! Interfaz de observación; las consultas se ejecutan fuera del hilo de entrada.
 use crate::modules::{
-    agents, docker, health, projects, remote, services, storage, updates, watchdog,
+    agents, developer, docker, health, projects, remote, services, storage, updates, watchdog,
 };
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind},
@@ -21,9 +21,17 @@ use std::{
     time::{Duration, Instant},
 };
 
-const NAMES: [&str; 9] = [
-    "Health", "Services", "Docker", "Projects", "Storage", "Updates", "Agents", "Remote",
+const NAMES: [&str; 10] = [
+    "Health",
+    "Services",
+    "Docker",
+    "Projects",
+    "Storage",
+    "Updates",
+    "Agents",
+    "Remote",
     "Watchdog",
+    "Developer",
 ];
 const LIMIT: Duration = Duration::from_secs(10);
 
@@ -38,6 +46,7 @@ enum Data {
     Updates(Vec<updates::Observation>),
     Agents(Vec<agents::Observation>),
     Remote(Vec<remote::Observation>),
+    Developer(Vec<String>),
 }
 impl Data {
     fn len(&self) -> usize {
@@ -50,6 +59,7 @@ impl Data {
             Self::Updates(v) => v.len(),
             Self::Agents(v) => v.len(),
             Self::Remote(v) => v.len(),
+            Self::Developer(v) => v.len(),
         }
     }
     fn line(&self, index: usize, detail: bool) -> Option<String> {
@@ -64,6 +74,7 @@ impl Data {
             Self::Updates(v) => v.get(index).map(updates::Observation::line),
             Self::Agents(v) => v.get(index).map(agents::Observation::line),
             Self::Remote(v) => v.get(index).map(remote::Observation::line),
+            Self::Developer(v) => v.get(index).cloned(),
             Self::Storage(status, capacity) => (index == 0).then(|| {
                 let capacity = capacity.map_or_else(|| "desconocido".to_owned(), |c| format!(
                     "total={} B, usada={} B, disponible={} B, reservada={} B", c.total_bytes, c.used_bytes, c.available_bytes, c.reserved_bytes));
@@ -138,6 +149,7 @@ fn query_error(view: usize) -> &'static str {
         6 => "Error al consultar Agents; datos anteriores",
         7 => "Error al consultar Remote; datos anteriores",
         8 => "Error al consultar Watchdog; datos anteriores",
+        9 => "Error al consultar Developer; datos anteriores",
         _ => "Error al consultar vista; datos anteriores",
     }
 }
@@ -150,16 +162,16 @@ struct Worker {
 struct App {
     selected: usize,
     view: usize,
-    content: [String; 9],
-    data: [Option<Data>; 9],
-    status: [Option<String>; 9],
+    content: [String; 10],
+    data: [Option<Data>; 10],
+    status: [Option<String>; 10],
     worker: Option<Worker>,
     notice: Option<String>,
     row: usize,
     column: usize,
     list_row: usize,
     list_column: usize,
-    item: [usize; 9],
+    item: [usize; 10],
     table_focus: bool,
     detail: bool,
     height: usize,
@@ -180,7 +192,7 @@ impl App {
             column: 0,
             list_row: 0,
             list_column: 0,
-            item: [0; 9],
+            item: [0; 10],
             table_focus: false,
             detail: false,
             height: 0,
@@ -458,6 +470,7 @@ fn query(view: usize) -> Answer {
         6 => Ok(Data::Agents(agents::status())),
         7 => Ok(Data::Remote(remote::status())),
         8 => Ok(Data::Watchdog(watchdog::status("20"))),
+        9 => Ok(Data::Developer(developer::status())),
         _ => Err("vista desconocida".into()),
     }
 }
@@ -564,6 +577,54 @@ mod tests {
     }
 
     #[test]
+    fn developer_manual_request_and_navigation() {
+        fn fake(view: usize) -> Answer {
+            assert_eq!(view, 9);
+            Ok(Data::Developer(developer::status_from(vec![
+                agents::Observation {
+                    name: "Pi Agent",
+                    version: Some("1.2.3".into()),
+                    executable: None,
+                },
+            ])))
+        }
+        fn fail(_: usize) -> Answer {
+            Err("private error".into())
+        }
+        let mut app = App::new();
+        for _ in 0..9 {
+            app.key(KeyCode::Down);
+        }
+        app.key(KeyCode::Enter);
+        assert_eq!(app.view, 9);
+        assert!(app.worker.is_none());
+        assert!(app.text().contains("Sin consultar"));
+        app.key_with(KeyCode::Char('R'), fake);
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while app.worker.is_some() && Instant::now() < deadline {
+            app.update();
+            thread::yield_now();
+        }
+        assert!(app.worker.is_none());
+        assert!(app.text().contains("versión npm=1.2.3"));
+        assert!(app.text().contains("no vinculada al ejecutable"));
+        app.key(KeyCode::Tab);
+        app.key(KeyCode::Enter);
+        assert!(app.detail);
+        app.key(KeyCode::Esc);
+        assert!(!app.detail);
+        app.key_with(KeyCode::Char('r'), fail);
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while app.worker.is_some() && Instant::now() < deadline {
+            app.update();
+            thread::yield_now();
+        }
+        assert!(app.text().contains("Error al consultar Developer"));
+        assert!(app.text().contains("versión npm=1.2.3"));
+        assert!(!app.text().contains("private error"));
+    }
+
+    #[test]
     fn watchdog_manual_request_unknown_error_and_navigation() {
         fn fake(view: usize) -> Answer {
             assert_eq!(view, 8);
@@ -603,6 +664,9 @@ mod tests {
         assert!(app.text().contains("Resultado: desconocido"));
         assert!(!app.text().contains("private error"));
         assert!(app.worker.is_none());
+        app.key(KeyCode::Down);
+        app.key(KeyCode::Enter);
+        assert_eq!(app.view, 9);
         app.key(KeyCode::Down);
         app.key(KeyCode::Enter);
         assert_eq!(app.view, 0);

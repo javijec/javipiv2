@@ -15,8 +15,8 @@ S9. "No sudo ni cambios de privilegios." "No modificar JaviPi original ni servic
 ## Tasks
 - T1 [S1,S9] done: documented operator validation and all 21 areas; commit: 9505214
 - T2 [S2,S9] done: 5 focused tests and CLI Health query passed; commit: bb37069
-- T3 [S3,S9] in progress: manual TUI using existing assessment; commit: pending
-- T4 [S4,S9] route: bounded worker Developer; commit: pending
+- T3 [S3,S9] done: 22 synthetic TUI tests, formatting and Clippy passed; commit: 9d1cc4a
+- T4 [S4,S9] in progress: bounded worker Developer; commit: pending
 - T5 [S5,S9] route: TUI overview; commit: pending
 - T6 [S6,S9] route: read-only investigation or omit; commit: pending
 - T7 [S7,S9] route: choose safe real observation or omit; commit: pending

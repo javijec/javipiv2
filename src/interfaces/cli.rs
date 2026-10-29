@@ -28,6 +28,7 @@ fn help() {
     println!("  storage status         Montajes relevantes (observación pasiva)");
     println!("  updates check          Comparar componentes con upstream (requiere red)");
     println!("  developer compare <instalada> <referencia>  Comparar datos suministrados, sin red");
+    println!("  developer status       Evidencia local de agentes y versiones npm, sin red");
     println!("  watchdog memory <total-kib> <available-kib> <minimum-percent>  Evaluar valores suministrados, sin monitoreo");
     println!("  watchdog status <minimum-percent>  Consultar memoria Health, sin monitoreo");
     println!("  agents status          Observar ejecutables y versiones npm locales (sin red)");
@@ -185,6 +186,11 @@ pub fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), String> {
             println!("Resultado del último intento: desconocido");
         }
         ["updates", "check"] => println!("{}", format_updates(&updates::check())),
+        ["developer", "status"] => {
+            for line in developer::status() {
+                println!("{line}");
+            }
+        }
         ["developer", "compare", installed, reference] => {
             let result = match developer::compare(installed, reference) {
                 updates::Comparison::Current => "iguales",
