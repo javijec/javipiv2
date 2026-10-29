@@ -1,5 +1,7 @@
 //! Interfaz de observación; las consultas se ejecutan fuera del hilo de entrada.
-use crate::modules::{agents, docker, health, projects, remote, services, storage, updates};
+use crate::modules::{
+    agents, docker, health, projects, remote, services, storage, updates, watchdog,
+};
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind},
     execute,
@@ -19,14 +21,16 @@ use std::{
     time::{Duration, Instant},
 };
 
-const NAMES: [&str; 8] = [
+const NAMES: [&str; 9] = [
     "Health", "Services", "Docker", "Projects", "Storage", "Updates", "Agents", "Remote",
+    "Watchdog",
 ];
 const LIMIT: Duration = Duration::from_secs(10);
 
 #[derive(Debug)]
 enum Data {
     Health(String),
+    Watchdog(watchdog::Assessment),
     Services(Vec<services::Service>),
     Docker(Vec<docker::Container>),
     Projects(Vec<projects::Project>),
@@ -38,7 +42,7 @@ enum Data {
 impl Data {
     fn len(&self) -> usize {
         match self {
-            Self::Health(_) => 0,
+            Self::Health(_) | Self::Watchdog(_) => 0,
             Self::Storage(_, _) => 1,
             Self::Services(v) => v.len(),
             Self::Docker(v) => v.len(),
@@ -56,7 +60,7 @@ impl Data {
                 .to_owned()
         };
         match self {
-            Self::Health(_) => None,
+            Self::Health(_) | Self::Watchdog(_) => None,
             Self::Updates(v) => v.get(index).map(updates::Observation::line),
             Self::Agents(v) => v.get(index).map(agents::Observation::line),
             Self::Remote(v) => v.get(index).map(remote::Observation::line),
@@ -133,6 +137,7 @@ fn query_error(view: usize) -> &'static str {
         5 => "Error al consultar Updates; datos anteriores",
         6 => "Error al consultar Agents; datos anteriores",
         7 => "Error al consultar Remote; datos anteriores",
+        8 => "Error al consultar Watchdog; datos anteriores",
         _ => "Error al consultar vista; datos anteriores",
     }
 }
@@ -145,16 +150,16 @@ struct Worker {
 struct App {
     selected: usize,
     view: usize,
-    content: [String; 8],
-    data: [Option<Data>; 8],
-    status: [Option<String>; 8],
+    content: [String; 9],
+    data: [Option<Data>; 9],
+    status: [Option<String>; 9],
     worker: Option<Worker>,
     notice: Option<String>,
     row: usize,
     column: usize,
     list_row: usize,
     list_column: usize,
-    item: [usize; 8],
+    item: [usize; 9],
     table_focus: bool,
     detail: bool,
     height: usize,
@@ -175,7 +180,7 @@ impl App {
             column: 0,
             list_row: 0,
             list_column: 0,
-            item: [0; 8],
+            item: [0; 9],
             table_focus: false,
             detail: false,
             height: 0,
@@ -185,6 +190,7 @@ impl App {
         let mut text = match &self.data[self.view] {
             None => self.content[self.view].clone(),
             Some(Data::Health(text)) => text.clone(),
+            Some(Data::Watchdog(assessment)) => assessment.line(),
             Some(data) if self.detail => data
                 .line(self.item[self.view], true)
                 .unwrap_or_else(|| "Sin elementos.".into()),
@@ -202,6 +208,9 @@ impl App {
                 .collect::<Vec<_>>()
                 .join("\n"),
         };
+        if self.view == 8 {
+            text = format!("Umbral ilustrativo fijo: 20% de memoria disponible; no diagnóstico. Solo evalúa memoria, no la salud general. Sin supervisión ni acciones automáticas.\n\n{text}");
+        }
         if self.view == 7 {
             text.push_str("\n\nEstado de servicios locales; no demuestra conectividad.");
         }
@@ -448,6 +457,7 @@ fn query(view: usize) -> Answer {
         5 => Ok(Data::Updates(updates::check())),
         6 => Ok(Data::Agents(agents::status())),
         7 => Ok(Data::Remote(remote::status())),
+        8 => Ok(Data::Watchdog(watchdog::status("20"))),
         _ => Err("vista desconocida".into()),
     }
 }
@@ -551,6 +561,52 @@ mod tests {
             },
             None,
         ))
+    }
+
+    #[test]
+    fn watchdog_manual_request_unknown_error_and_navigation() {
+        fn fake(view: usize) -> Answer {
+            assert_eq!(view, 8);
+            Ok(Data::Watchdog(
+                crate::modules::watchdog::Assessment::Unknown,
+            ))
+        }
+        fn fail(_: usize) -> Answer {
+            Err("private error".into())
+        }
+        let mut app = App::new();
+        for _ in 0..8 {
+            app.key(KeyCode::Down);
+        }
+        app.key(KeyCode::Enter);
+        assert_eq!(app.view, 8);
+        assert!(app.worker.is_none());
+        assert!(app.text().contains("Sin consultar"));
+        assert!(app.text().contains("20%"));
+        assert!(app.text().contains("no diagnóstico"));
+        app.key_with(KeyCode::Char('R'), fake);
+        assert_eq!(app.worker.as_ref().map(|w| w.view), Some(8));
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while app.worker.is_some() && Instant::now() < deadline {
+            app.update();
+            thread::yield_now();
+        }
+        assert!(app.worker.is_none());
+        assert!(app.text().contains("Resultado: desconocido"));
+        app.key_with(KeyCode::Char('r'), fail);
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while app.worker.is_some() && Instant::now() < deadline {
+            app.update();
+            thread::yield_now();
+        }
+        assert!(app.text().contains("Error al consultar Watchdog"));
+        assert!(app.text().contains("Resultado: desconocido"));
+        assert!(!app.text().contains("private error"));
+        assert!(app.worker.is_none());
+        app.key(KeyCode::Down);
+        app.key(KeyCode::Enter);
+        assert_eq!(app.view, 0);
+        assert!(app.worker.is_none());
     }
 
     #[test]
