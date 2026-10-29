@@ -5,3 +5,4 @@ pub mod preflight;
 pub mod projects;
 pub mod services;
 pub mod storage;
+pub mod updates;

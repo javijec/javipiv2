@@ -1,5 +1,5 @@
 //! Interfaz de observación; las consultas se ejecutan fuera del hilo de entrada.
-use crate::modules::{docker, health, projects, services, storage};
+use crate::modules::{docker, health, projects, services, storage, updates};
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind},
     execute,
@@ -19,7 +19,9 @@ use std::{
     time::{Duration, Instant},
 };
 
-const NAMES: [&str; 5] = ["Health", "Services", "Docker", "Projects", "Storage"];
+const NAMES: [&str; 6] = [
+    "Health", "Services", "Docker", "Projects", "Storage", "Updates",
+];
 const LIMIT: Duration = Duration::from_secs(10);
 
 #[derive(Debug)]
@@ -29,6 +31,7 @@ enum Data {
     Docker(Vec<docker::Container>),
     Projects(Vec<projects::Project>),
     Storage(storage::StorageStatus, Option<storage::Capacity>),
+    Updates(Vec<updates::Observation>),
 }
 impl Data {
     fn len(&self) -> usize {
@@ -38,6 +41,7 @@ impl Data {
             Self::Services(v) => v.len(),
             Self::Docker(v) => v.len(),
             Self::Projects(v) => v.len(),
+            Self::Updates(v) => v.len(),
         }
     }
     fn line(&self, index: usize, detail: bool) -> Option<String> {
@@ -49,6 +53,7 @@ impl Data {
         };
         match self {
             Self::Health(_) => None,
+            Self::Updates(v) => v.get(index).map(updates::Observation::line),
             Self::Storage(status, capacity) => (index == 0).then(|| {
                 let capacity = capacity.map_or_else(|| "desconocido".to_owned(), |c| format!(
                     "total={} B, usada={} B, disponible={} B, reservada={} B", c.total_bytes, c.used_bytes, c.available_bytes, c.reserved_bytes));
@@ -119,6 +124,7 @@ fn query_error(view: usize) -> &'static str {
         2 => "Error al consultar Docker; datos anteriores",
         3 => "Error al consultar Projects; datos anteriores",
         4 => "Error al consultar Storage (/proc/self/mountinfo); datos anteriores",
+        5 => "Error al consultar Updates; datos anteriores",
         _ => "Error al consultar vista; datos anteriores",
     }
 }
@@ -131,16 +137,16 @@ struct Worker {
 struct App {
     selected: usize,
     view: usize,
-    content: [String; 5],
-    data: [Option<Data>; 5],
-    status: [Option<String>; 5],
+    content: [String; 6],
+    data: [Option<Data>; 6],
+    status: [Option<String>; 6],
     worker: Option<Worker>,
     notice: Option<String>,
     row: usize,
     column: usize,
     list_row: usize,
     list_column: usize,
-    item: [usize; 5],
+    item: [usize; 6],
     table_focus: bool,
     detail: bool,
     height: usize,
@@ -161,7 +167,7 @@ impl App {
             column: 0,
             list_row: 0,
             list_column: 0,
-            item: [0; 5],
+            item: [0; 6],
             table_focus: false,
             detail: false,
             height: 0,
@@ -428,6 +434,7 @@ fn query(view: usize) -> Answer {
                 .map(Data::Projects)
         }
         4 => storage::read_capacity().map(|(status, capacity)| Data::Storage(status, capacity)),
+        5 => Ok(Data::Updates(updates::check())),
         _ => Err("vista desconocida".into()),
     }
 }
@@ -531,6 +538,37 @@ mod tests {
             },
             None,
         ))
+    }
+
+    #[test]
+    fn updates_manual_request_uses_worker_and_preserves_navigation() {
+        fn fake(_: usize) -> Answer {
+            Ok(Data::Updates(vec![updates::Observation {
+                name: "Pi",
+                installed: Some("1.2.3".into()),
+                upstream: Some("2.0.0".into()),
+                comparison: updates::Comparison::Available,
+            }]))
+        }
+        let mut app = App::new();
+        for _ in 0..5 {
+            app.key(KeyCode::Down);
+        }
+        app.key(KeyCode::Enter);
+        assert_eq!(app.view, 5);
+        assert!(app.worker.is_none());
+        assert!(app.text().contains("Sin consultar"));
+        app.key_with(KeyCode::Char('R'), fake);
+        assert_eq!(app.worker.as_ref().map(|w| w.view), Some(5));
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while app.worker.is_some() && Instant::now() < deadline {
+            app.update();
+            thread::yield_now();
+        }
+        assert!(app.worker.is_none());
+        assert!(app
+            .text()
+            .contains("Pi: instalada=1.2.3, upstream=2.0.0, estado=actualización disponible"));
     }
 
     #[test]

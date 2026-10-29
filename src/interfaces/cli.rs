@@ -2,7 +2,7 @@
 
 use crate::core::catalog::{all_modules, profile_modules};
 use crate::core::minimal_simulation::MinimalSimulation;
-use crate::modules::{backups, docker, health, preflight, projects, services, storage};
+use crate::modules::{backups, docker, health, preflight, projects, services, storage, updates};
 use std::ffi::OsString;
 use std::io::Read;
 
@@ -23,6 +23,7 @@ fn help() {
     println!("                         Solo plan; --allow autoriza esa unidad para esta consulta");
     println!("  backup inspect --stdin  Observar snapshots JSON suministrados por stdin");
     println!("  storage status         Montajes relevantes (observación pasiva)");
+    println!("  updates check          Comparar componentes con upstream (requiere red)");
     println!("  docker status          Consultar daemon Docker local");
     println!("  docker list            Listar contenedores locales");
     println!("  docker inspect <nombre>  Información básica de un contenedor");
@@ -38,6 +39,14 @@ fn help() {
     println!("  preflight minimal --fixture  Diagnóstico simulado desde stdin");
     println!("  version                Versión del proyecto");
     println!("  help                   Esta ayuda");
+}
+
+fn format_updates(observations: &[updates::Observation]) -> String {
+    observations
+        .iter()
+        .map(|observation| observation.line())
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn format_bytes(bytes: u64) -> String {
@@ -167,6 +176,7 @@ pub fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), String> {
             println!("Último intento: desconocido");
             println!("Resultado del último intento: desconocido");
         }
+        ["updates", "check"] => println!("{}", format_updates(&updates::check())),
         ["storage", "status"] => {
             let (status, capacity) = storage::read_capacity().unwrap_or_default();
             println!(
@@ -293,6 +303,19 @@ pub fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), String> {
 mod tests {
     use super::run;
     use std::ffi::OsString;
+
+    #[test]
+    fn updates_cli_renders_synthetic_data_without_query() {
+        let observations = crate::modules::updates::check_with(
+            |_| Some(br#"{"version":"1.0.0"}"#.to_vec()),
+            |_| Some(br#"{"version":"2.0.0","tag_name":"v2.0.0"}"#.to_vec()),
+        );
+        let text = super::format_updates(&observations);
+        assert!(text
+            .contains("Codex: instalada=1.0.0, upstream=2.0.0, estado=actualización disponible"));
+        assert!(text.contains("Engram: instalada=desconocido, upstream=2.0.0, estado=desconocido"));
+        assert_eq!(text.lines().count(), 6);
+    }
 
     #[test]
     fn storage_capacity_rendering_is_exact() {
