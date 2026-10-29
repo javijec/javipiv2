@@ -3,7 +3,7 @@
 use crate::core::catalog::{all_modules, profile_modules};
 use crate::core::minimal_simulation::MinimalSimulation;
 use crate::modules::{
-    agents, backups, docker, health, preflight, projects, services, storage, updates,
+    agents, backups, docker, health, preflight, projects, remote, services, storage, updates,
 };
 use std::ffi::OsString;
 use std::io::Read;
@@ -27,6 +27,7 @@ fn help() {
     println!("  storage status         Montajes relevantes (observación pasiva)");
     println!("  updates check          Comparar componentes con upstream (requiere red)");
     println!("  agents status          Observar ejecutables y versiones npm locales (sin red)");
+    println!("  remote status          Observar unidades SSH y Tailscale locales (sin red)");
     println!("  docker status          Consultar daemon Docker local");
     println!("  docker list            Listar contenedores locales");
     println!("  docker inspect <nombre>  Información básica de un contenedor");
@@ -180,6 +181,12 @@ pub fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), String> {
             println!("Resultado del último intento: desconocido");
         }
         ["updates", "check"] => println!("{}", format_updates(&updates::check())),
+        ["remote", "status"] => {
+            println!("Estado de servicios locales; no demuestra conectividad.");
+            for observation in remote::status() {
+                println!("{}", observation.line());
+            }
+        }
         ["agents", "status"] => {
             for observation in agents::status() {
                 println!("{}", observation.line());

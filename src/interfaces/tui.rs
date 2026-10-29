@@ -1,5 +1,5 @@
 //! Interfaz de observación; las consultas se ejecutan fuera del hilo de entrada.
-use crate::modules::{agents, docker, health, projects, services, storage, updates};
+use crate::modules::{agents, docker, health, projects, remote, services, storage, updates};
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind},
     execute,
@@ -19,8 +19,8 @@ use std::{
     time::{Duration, Instant},
 };
 
-const NAMES: [&str; 7] = [
-    "Health", "Services", "Docker", "Projects", "Storage", "Updates", "Agents",
+const NAMES: [&str; 8] = [
+    "Health", "Services", "Docker", "Projects", "Storage", "Updates", "Agents", "Remote",
 ];
 const LIMIT: Duration = Duration::from_secs(10);
 
@@ -33,6 +33,7 @@ enum Data {
     Storage(storage::StorageStatus, Option<storage::Capacity>),
     Updates(Vec<updates::Observation>),
     Agents(Vec<agents::Observation>),
+    Remote(Vec<remote::Observation>),
 }
 impl Data {
     fn len(&self) -> usize {
@@ -44,6 +45,7 @@ impl Data {
             Self::Projects(v) => v.len(),
             Self::Updates(v) => v.len(),
             Self::Agents(v) => v.len(),
+            Self::Remote(v) => v.len(),
         }
     }
     fn line(&self, index: usize, detail: bool) -> Option<String> {
@@ -57,6 +59,7 @@ impl Data {
             Self::Health(_) => None,
             Self::Updates(v) => v.get(index).map(updates::Observation::line),
             Self::Agents(v) => v.get(index).map(agents::Observation::line),
+            Self::Remote(v) => v.get(index).map(remote::Observation::line),
             Self::Storage(status, capacity) => (index == 0).then(|| {
                 let capacity = capacity.map_or_else(|| "desconocido".to_owned(), |c| format!(
                     "total={} B, usada={} B, disponible={} B, reservada={} B", c.total_bytes, c.used_bytes, c.available_bytes, c.reserved_bytes));
@@ -129,6 +132,7 @@ fn query_error(view: usize) -> &'static str {
         4 => "Error al consultar Storage (/proc/self/mountinfo); datos anteriores",
         5 => "Error al consultar Updates; datos anteriores",
         6 => "Error al consultar Agents; datos anteriores",
+        7 => "Error al consultar Remote; datos anteriores",
         _ => "Error al consultar vista; datos anteriores",
     }
 }
@@ -141,16 +145,16 @@ struct Worker {
 struct App {
     selected: usize,
     view: usize,
-    content: [String; 7],
-    data: [Option<Data>; 7],
-    status: [Option<String>; 7],
+    content: [String; 8],
+    data: [Option<Data>; 8],
+    status: [Option<String>; 8],
     worker: Option<Worker>,
     notice: Option<String>,
     row: usize,
     column: usize,
     list_row: usize,
     list_column: usize,
-    item: [usize; 7],
+    item: [usize; 8],
     table_focus: bool,
     detail: bool,
     height: usize,
@@ -171,7 +175,7 @@ impl App {
             column: 0,
             list_row: 0,
             list_column: 0,
-            item: [0; 7],
+            item: [0; 8],
             table_focus: false,
             detail: false,
             height: 0,
@@ -198,6 +202,9 @@ impl App {
                 .collect::<Vec<_>>()
                 .join("\n"),
         };
+        if self.view == 7 {
+            text.push_str("\n\nEstado de servicios locales; no demuestra conectividad.");
+        }
         if self.view == 1 && !self.detail {
             text.push_str("\n\nServicios conocidos por systemd; no es un inventario completo.");
         }
@@ -440,6 +447,7 @@ fn query(view: usize) -> Answer {
         4 => storage::read_capacity().map(|(status, capacity)| Data::Storage(status, capacity)),
         5 => Ok(Data::Updates(updates::check())),
         6 => Ok(Data::Agents(agents::status())),
+        7 => Ok(Data::Remote(remote::status())),
         _ => Err("vista desconocida".into()),
     }
 }
@@ -543,6 +551,39 @@ mod tests {
             },
             None,
         ))
+    }
+
+    #[test]
+    fn remote_manual_request_uses_worker() {
+        fn fake(_: usize) -> Answer {
+            Ok(Data::Remote(remote::status_with(|_| Err("privado".into()))))
+        }
+        let mut app = App::new();
+        for _ in 0..7 {
+            app.key(KeyCode::Down);
+        }
+        app.key(KeyCode::Enter);
+        assert_eq!(app.view, 7);
+        assert!(app.worker.is_none());
+        assert!(app.text().contains("Sin consultar"));
+        app.key_with(KeyCode::Char('R'), fake);
+        assert_eq!(app.worker.as_ref().map(|w| w.view), Some(7));
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while app.worker.is_some() && Instant::now() < deadline {
+            app.update();
+            thread::yield_now();
+        }
+        assert!(app.worker.is_none());
+        assert!(app
+            .text()
+            .contains("SSH (ssh.service): carga=desconocido, actividad=desconocido"));
+        assert!(app.text().contains("no demuestra conectividad"));
+        assert!(!app.text().contains("privado"));
+        app.key(KeyCode::Tab);
+        app.key(KeyCode::Enter);
+        assert!(app.detail);
+        app.key(KeyCode::Esc);
+        assert!(!app.detail);
     }
 
     #[test]
