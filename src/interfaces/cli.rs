@@ -29,6 +29,7 @@ fn help() {
     println!("  updates check          Comparar componentes con upstream (requiere red)");
     println!("  developer compare <instalada> <referencia>  Comparar datos suministrados, sin red");
     println!("  watchdog memory <total-kib> <available-kib> <minimum-percent>  Evaluar valores suministrados, sin monitoreo");
+    println!("  watchdog status <minimum-percent>  Consultar memoria Health, sin monitoreo");
     println!("  agents status          Observar ejecutables y versiones npm locales (sin red)");
     println!("  remote status          Observar unidades y TCP local sin atribución (sin red)");
     println!("  docker status          Consultar daemon Docker local");
@@ -193,6 +194,9 @@ pub fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), String> {
             };
             println!("Versiones suministradas por el usuario; no acreditan instalación ni disponibilidad.");
             println!("Resultado: {result}");
+        }
+        ["watchdog", "status", minimum] => {
+            println!("{}", watchdog::status(minimum).line());
         }
         ["watchdog", "memory", total, available, minimum] => {
             let result = match watchdog::assess_memory(total, available, minimum) {

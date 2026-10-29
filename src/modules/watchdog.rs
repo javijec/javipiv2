@@ -7,6 +7,36 @@ pub enum Assessment {
     Unknown,
 }
 
+impl Assessment {
+    pub fn line(&self) -> String {
+        let result = match self {
+            Self::Healthy => "saludable",
+            Self::BelowMinimum => "por debajo del mínimo",
+            Self::Unknown => "desconocido",
+        };
+        format!("Resultado: {result}")
+    }
+}
+
+/// Consulta puntual; el umbral siempre es proporcionado por el operador.
+pub fn status_with(
+    minimum: &str,
+    query: impl FnOnce() -> std::io::Result<super::health::SystemStatus>,
+) -> Assessment {
+    match query() {
+        Ok(status) => assess_memory(
+            &status.memory_total_kib.to_string(),
+            &status.memory_available_kib.to_string(),
+            minimum,
+        ),
+        Err(_) => Assessment::Unknown,
+    }
+}
+
+pub fn status(minimum: &str) -> Assessment {
+    status_with(minimum, super::health::read_status)
+}
+
 fn number(input: &str) -> Option<u64> {
     if input.is_empty() || input.len() > 20 || !input.bytes().all(|b| b.is_ascii_digit()) {
         return None;

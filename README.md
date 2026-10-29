@@ -52,9 +52,11 @@ F3-B prepara un ejecutor con argumentos separados y una política independiente 
 
 `developer compare <instalada> <referencia>` compara exclusivamente dos valores suministrados por el usuario, no versiones instaladas ni disponibilidad de actualizaciones. Admite exactamente tres componentes numéricos ASCII separados por puntos, de 1 a 9 dígitos cada uno; entradas no admitidas producen `desconocido`. No abre rutas, usa red ni ejecuta herramientas. No se agrega vista TUI: la operación requiere dos argumentos explícitos y la interfaz actual no ofrece entrada de texto para ellos.
 
-## Evaluación Watchdog offline
+## Evaluación Watchdog
 
 `watchdog memory <total-kib> <available-kib> <minimum-percent>` evalúa únicamente valores suministrados por el usuario, no monitorea memoria real. Son enteros ASCII de hasta 20 dígitos dentro de `u64`; el total debe ser positivo, el disponible no puede superarlo y el mínimo debe estar entre 0 y 100. La igualdad con el mínimo es saludable; valores inválidos son `desconocido`. No hay valores predeterminados, programación, notificaciones ni lecturas del sistema, servicios o red. No se agrega vista TUI porque la interfaz actual no permite ingresar los tres valores explícitos.
+
+`watchdog status <minimum-percent>` consulta una vez la memoria real mediante Health y evalúa el umbral explícito del operador con las mismas reglas. Si falla Health o los datos o el umbral son inválidos, muestra `desconocido` sin exponer el error. Health también lee hostname y uptime de `/proc`; no hay umbral predeterminado, supervisión periódica ni acciones automáticas. La biblioteca comparte la evaluación y el formato para una futura TUI; esta consulta aún no está integrada en ella.
 
 ## Consulta de componentes
 

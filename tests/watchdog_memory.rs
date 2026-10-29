@@ -1,3 +1,4 @@
+use javipiv2::modules::{health::SystemStatus, watchdog};
 use std::process::Command;
 
 fn run(args: &[&str]) -> (i32, String, String) {
@@ -54,6 +55,49 @@ fn invalid_values_are_unknown() {
     ] {
         assessment(total, available, minimum, "desconocido");
     }
+}
+
+#[test]
+fn status_uses_injected_health_and_hides_errors() {
+    for (total, available, minimum, expected) in [
+        (100, 20, "20", "saludable"),
+        (100, 19, "20", "por debajo del mínimo"),
+        (1, 0, "0", "saludable"),
+        (1, 1, "100", "saludable"),
+        (0, 0, "0", "desconocido"),
+        (1, 2, "0", "desconocido"),
+        (1, 1, "101", "desconocido"),
+        (1, 1, "x", "desconocido"),
+    ] {
+        let observation = watchdog::status_with(minimum, || {
+            Ok(SystemStatus {
+                hostname: "synthetic".into(),
+                uptime_seconds: 0,
+                memory_total_kib: total,
+                memory_available_kib: available,
+            })
+        });
+        assert_eq!(observation.line(), format!("Resultado: {expected}"));
+    }
+    let observation = watchdog::status_with("20", || Err(std::io::Error::other("secret error")));
+    assert_eq!(observation.line(), "Resultado: desconocido");
+}
+
+#[test]
+fn status_help_and_missing_threshold() {
+    let (code, stdout, stderr) = run(&["help"]);
+    assert_eq!(code, 0);
+    assert_eq!(stderr, "");
+    assert!(stdout.lines().any(|line| line
+        == "  watchdog status <minimum-percent>  Consultar memoria Health, sin monitoreo"));
+    assert_eq!(
+        run(&["watchdog", "status"]),
+        (
+            1,
+            String::new(),
+            "Error: comando desconocido; usá javipiv2 help\n".into()
+        )
+    );
 }
 
 #[test]

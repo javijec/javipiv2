@@ -13,8 +13,8 @@ S8. "Revisar coherencia de CLI, TUI y módulos compartidos." "Corregir defectos 
 S9. "No sudo ni cambios de privilegios." "No modificar JaviPi original ni servicios productivos." "No iniciar, detener o reiniciar contenedores o servicios." "No modificar montajes, datos o configuraciones." "No instalar ni actualizar paquetes." "No activar autofs ni asumir riesgos nuevos de acceso a /srv." "No ejecutar backups ni restauraciones." "No habilitar acciones administrativas reales." "No usar GitHub Actions." "No hacer push ni merge." "Conservar todos los cambios y archivos ajenos." "No comprometer HerdR, Pi Agent ni Engram Cloud."
 
 ## Tasks
-- T1 [S1,S9] done: documented operator validation and all 21 areas; commit: current consolidation work unit
-- T2 [S2,S9] route: bounded worker CLI and Health; commit: pending
+- T1 [S1,S9] done: documented operator validation and all 21 areas; commit: 9505214
+- T2 [S2,S9] in progress: bounded worker CLI and Health; commit: pending
 - T3 [S3,S9] route: TUI after T2; commit: pending
 - T4 [S4,S9] route: bounded worker Developer; commit: pending
 - T5 [S5,S9] route: TUI overview; commit: pending
