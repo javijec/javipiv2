@@ -78,7 +78,11 @@ F3-B prepara un ejecutor con argumentos separados y una política independiente 
 
 ## Snapshots suministrados por stdin
 
-`javipiv2 backup inspect --stdin` interpreta un array JSON de `restic snapshots --json` suministrado explícitamente (máximo 4 MiB). No ejecuta Restic ni abre rutas o configuración. Reconoce tags `profile:full`, `profile:projects` y `profile:engram`; fechas ausentes o inválidas hacen desconocido el último snapshot. El último intento y su resultado no se pueden deducir del listado. Backups-B queda pospuesto por falta de una fuente fiable autorizada; no se agregan lectores.
+`javipiv2 backup status` y la vista TUI **Backups** (R manual) muestran configuración, snapshots actuales, último backup, último intento y resultado como desconocidos: no existe una fuente autorizada y fiable para establecerlos. No ejecutan Restic, scripts ni consultas del host, y no leen configuración ni credenciales. No se confunde «desconocido» con «no configurado» o «sin snapshots»: estos dos últimos requieren evidencia que todavía no está disponible.
+
+`javipiv2 backup status --stdin` acepta un array JSON suministrado explícitamente (máximo 4 MiB) y muestra sus snapshots por separado, sin atribuirles origen ni actualidad. Una lista vacía no demuestra que el repositorio esté vacío. `javipiv2 backup inspect --stdin` conserva la interpretación de Backups-A, incluyendo tags `profile:full`, `profile:projects` y `profile:engram`; fechas ausentes, inválidas o empatadas hacen desconocido el último snapshot. El último intento y su resultado nunca se deducen del listado.
+
+El helper original emite `[]` tanto si falta la configuración como si una consulta Restic devuelve cero snapshots; comprobar que existe su archivo tampoco demuestra configuración válida. Para información real faltan una fuente de estado sanitizada y autorizada, una consulta de snapshots con resultado distinguible de errores y un registro fiable del último intento. No se ejecuta el helper privilegiado ni se abren sus secretos.
 
 Ejemplo sintético:
 

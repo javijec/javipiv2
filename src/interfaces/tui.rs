@@ -22,7 +22,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-const NAMES: [&str; 14] = [
+const NAMES: [&str; 15] = [
     "Health",
     "Services",
     "Docker",
@@ -37,6 +37,7 @@ const NAMES: [&str; 14] = [
     "Clean",
     "Planning",
     "Installation",
+    "Backups",
 ];
 const LIMIT: Duration = Duration::from_secs(10);
 
@@ -195,18 +196,18 @@ struct Worker {
 struct App {
     selected: usize,
     view: usize,
-    content: [String; 14],
-    data: [Option<Data>; 14],
-    status: [Option<String>; 14],
-    failed: [bool; 14],
-    last_error: [Option<String>; 14],
+    content: [String; 15],
+    data: [Option<Data>; 15],
+    status: [Option<String>; 15],
+    failed: [bool; 15],
+    last_error: [Option<String>; 15],
     worker: Option<Worker>,
     notice: Option<String>,
     row: usize,
     column: usize,
     list_row: usize,
     list_column: usize,
-    item: [usize; 14],
+    item: [usize; 15],
     table_focus: bool,
     detail: bool,
     height: usize,
@@ -221,7 +222,7 @@ impl App {
             }),
             data: std::array::from_fn(|_| None),
             status: std::array::from_fn(|_| None),
-            failed: [false; 14],
+            failed: [false; 15],
             last_error: std::array::from_fn(|_| None),
             worker: None,
             notice: None,
@@ -229,7 +230,7 @@ impl App {
             column: 0,
             list_row: 0,
             list_column: 0,
-            item: [0; 14],
+            item: [0; 15],
             table_focus: false,
             detail: false,
             height: 0,
@@ -241,7 +242,7 @@ impl App {
             for (i, name) in NAMES
                 .iter()
                 .enumerate()
-                .filter(|(i, _)| *i != 10 && *i != 12 && *i != 13)
+                .filter(|(i, _)| *i != 10 && *i != 12 && *i != 13 && *i != 14)
             {
                 let state = if self.failed[i] {
                     "error"
@@ -367,6 +368,10 @@ impl App {
         if self.view == 10 {
             return;
         }
+        if self.view == 14 {
+            self.content[14] = crate::modules::backups::format_status(None);
+            return;
+        }
         if self.view == 12 {
             match crate::core::install_plan::simulate_profile("minimal") {
                 Ok(text) => self.content[12] = text,
@@ -470,7 +475,8 @@ impl App {
                     && self.view != 0
                     && self.view != 10
                     && self.view != 12
-                    && self.view != 13 =>
+                    && self.view != 13
+                    && self.view != 14 =>
             {
                 self.table_focus = !self.table_focus;
                 if self.table_focus {
@@ -671,12 +677,31 @@ pub fn run() -> Result<(), String> {
 mod tests {
     use super::*;
     #[test]
+    fn backups_status_is_manual_and_never_queries_host() {
+        fn forbidden(_: usize) -> Answer {
+            panic!("Backups must not query host");
+        }
+        let mut app = App::new();
+        app.key_with(KeyCode::Up, forbidden);
+        assert_eq!(NAMES[app.selected], "Backups");
+        app.key_with(KeyCode::Enter, forbidden);
+        assert!(app.worker.is_none());
+        assert!(app.text().contains("Sin consultar"));
+        app.key_with(KeyCode::Char('R'), forbidden);
+        assert!(app.worker.is_none());
+        assert!(app.text().contains("Configuración: desconocida"));
+        assert!(app
+            .text()
+            .contains("Resultado del último intento: desconocido"));
+    }
+    #[test]
     fn installation_requires_manual_request() {
         fn fake(view: usize) -> Answer {
             assert_eq!(view, 13);
             Ok(Data::Health("synthetic installation evidence".into(), true))
         }
         let mut app = App::new();
+        app.key_with(KeyCode::Up, fake);
         app.key_with(KeyCode::Up, fake);
         assert_eq!(NAMES[app.selected], "Installation");
         app.key_with(KeyCode::Enter, fake);
@@ -692,6 +717,7 @@ mod tests {
         let mut app = App::new();
         app.key_with(KeyCode::Up, forbidden);
         app.key_with(KeyCode::Up, forbidden);
+        app.key_with(KeyCode::Up, forbidden);
         assert_eq!(NAMES[app.selected], "Planning");
         app.key_with(KeyCode::Enter, forbidden);
         assert!(app.worker.is_none());
@@ -703,6 +729,8 @@ mod tests {
         assert!(app.text().contains("instalación indefinida y bloqueada"));
         app.key_with(KeyCode::Down, forbidden);
         assert_eq!(NAMES[app.selected], "Installation");
+        app.key_with(KeyCode::Down, forbidden);
+        assert_eq!(NAMES[app.selected], "Backups");
         app.key_with(KeyCode::Down, forbidden);
         assert_eq!(app.selected, 0);
     }
@@ -762,6 +790,8 @@ mod tests {
             app.selected = 0;
             check(&mut terminal, &app, "> Health");
             app.key(KeyCode::Up);
+            check(&mut terminal, &app, "> Backups");
+            app.key(KeyCode::Up);
             check(&mut terminal, &app, "> Installation");
             app.key(KeyCode::Up);
             check(&mut terminal, &app, "> Planning");
@@ -771,6 +801,7 @@ mod tests {
             check(&mut terminal, &app, "> Overview");
             app.key(KeyCode::Up);
             check(&mut terminal, &app, "> Developer");
+            app.key(KeyCode::Down);
             app.key(KeyCode::Down);
             app.key(KeyCode::Down);
             app.key(KeyCode::Down);
@@ -1080,6 +1111,9 @@ mod tests {
         app.key(KeyCode::Down);
         app.key(KeyCode::Enter);
         assert_eq!(app.view, 13);
+        app.key(KeyCode::Down);
+        app.key(KeyCode::Enter);
+        assert_eq!(app.view, 14);
         app.key(KeyCode::Down);
         app.key(KeyCode::Enter);
         assert_eq!(app.view, 0);

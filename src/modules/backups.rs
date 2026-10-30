@@ -12,6 +12,31 @@ pub struct Observation {
     pub newest: Option<Snapshot>,
 }
 
+/// Current status cannot be inferred without a trusted source. Supplied JSON is
+/// displayed separately; it is not evidence of configuration or a backup attempt.
+pub fn format_status(supplied: Option<&Observation>) -> String {
+    let mut result = String::from("Configuración: desconocida\nSnapshots actuales: desconocido\nÚltimo backup: desconocido\nÚltimo intento: desconocido\nResultado del último intento: desconocido\n");
+    if let Some(observation) = supplied {
+        result.push_str("Datos suministrados por stdin (origen y actualidad no verificados):\n");
+        if observation.count == 0 {
+            result.push_str(
+                "Lista suministrada: sin snapshots; no acredita el estado del repositorio.\n",
+            );
+        } else {
+            result.push_str(&format!("Snapshots suministrados: {}\n", observation.count));
+            if let Some(snapshot) = &observation.newest {
+                result.push_str(&format!(
+                    "Snapshot suministrado más reciente: {}\n",
+                    snapshot.time
+                ));
+            } else {
+                result.push_str("Snapshot suministrado más reciente: desconocido\n");
+            }
+        }
+    }
+    result
+}
+
 // Compara segundos UTC y fracciones con precisión arbitraria, sin depender del orden JSON.
 fn instant(s: &str) -> Option<(i64, String)> {
     let b = s.as_bytes();

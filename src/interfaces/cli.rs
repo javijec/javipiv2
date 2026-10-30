@@ -25,6 +25,7 @@ fn help() {
     println!("  service status <nombre>  Estado de un servicio (solo lectura)");
     println!("  service plan <start|stop|restart> <unidad.service> --allow <unidad.service>");
     println!("                         Solo plan; --allow autoriza esa unidad para esta consulta");
+    println!("  backup status [--stdin] Estado conservador; stdin son datos sin verificar");
     println!("  backup inspect --stdin  Observar snapshots JSON suministrados por stdin");
     println!("  storage status         Montajes relevantes (observación pasiva)");
     println!("  updates check          Comparar componentes con upstream (requiere red)");
@@ -162,6 +163,21 @@ pub fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), String> {
                 }
                 None => println!("Temperatura CPU: desconocida"),
             }
+        }
+        ["backup", "status"] => print!("{}", backups::format_status(None)),
+        ["backup", "status", "--stdin"] => {
+            const MAX_INPUT: usize = 4 * 1024 * 1024;
+            let mut input = Vec::new();
+            std::io::stdin()
+                .lock()
+                .take((MAX_INPUT + 1) as u64)
+                .read_to_end(&mut input)
+                .map_err(|_| "no se pudo leer stdin")?;
+            if input.len() > MAX_INPUT {
+                return Err("entrada de snapshots demasiado grande".into());
+            }
+            let observation = backups::inspect(&input)?;
+            print!("{}", backups::format_status(Some(&observation)));
         }
         ["backup", "inspect", "--stdin"] => {
             const MAX_INPUT: usize = 4 * 1024 * 1024;
