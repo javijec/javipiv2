@@ -450,3 +450,34 @@ fn malformed_journal_preserves_everything() {
     assert_eq!(fs::read(fixture.path("binary.tmp")).unwrap(), BINARY);
     assert_eq!(fs::read(fixture.path("journal")).unwrap(), b"partial");
 }
+
+#[test]
+fn interrupted_recovery_continues_when_owned_file_already_removed() {
+    let fixture = Fixture::new();
+    fixture.install(None, |_| {}).unwrap();
+    // Model a stop after the first owned deletion, leaving the journal intact.
+    fs::remove_file(fixture.path("binary")).unwrap();
+    fixture.recover().unwrap();
+    fixture.recover().unwrap();
+    for name in ["binary", "registry", "journal", "journal.next"] {
+        assert!(!fixture.exists(name).unwrap());
+    }
+}
+
+#[test]
+fn inconsistent_journal_does_not_remove_fixture_files() {
+    let fixture = Fixture::new();
+    assert!(fixture.install(Some(6), |_| {}).is_err());
+    let path = fixture.path("journal");
+    let mut journal: Journal = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    journal.phase = Phase::Prepared; // Contradicts the recorded binary identity.
+    fs::write(&path, serde_json::to_vec(&journal).unwrap()).unwrap();
+    let before = fs::read(&path).unwrap();
+    assert!(fixture
+        .recover()
+        .unwrap_err()
+        .to_string()
+        .contains("intervención manual"));
+    assert_eq!(fs::read(fixture.path("binary.tmp")).unwrap(), BINARY);
+    assert_eq!(fs::read(path).unwrap(), before);
+}
